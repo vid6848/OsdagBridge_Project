@@ -119,7 +119,7 @@ from osdagbridge.core.utils.common import (
 )
 
 from osdagbridge.core.reports.report_utils import _tex
-from .styles import preamble_block
+from .styles import SPACING, TABLE_SPECS, VSPACE_MINI, preamble_block, status
 from .executive_summary import executive_summary
 from .chap1 import ch1_project_info
 from .chap2 import ch2_input_parameters
@@ -165,7 +165,7 @@ def title_page(m, osdag_logo, org_logo):
         lhs = r'\textit{(Osdag Logo)}'
 
     if org_logo:
-        rhs = r'\includegraphics[width=\linewidth,height=2.2cm,keepaspectratio]{' + org_logo.replace('\\', '/') + r'}'
+        rhs = r'\includegraphics[width=\linewidth,height=' + SPACING['logo_height'] + r',keepaspectratio]{' + org_logo.replace('\\', '/') + r'}'
     else:
         rhs = r''
 
@@ -179,19 +179,19 @@ def title_page(m, osdag_logo, org_logo):
 \raggedleft
 """ + rhs + r"""
 \end{minipage}
-\\[1cm]
+\\[""" + SPACING['title_block'] + r"""]
 """
 
     return r"""
 \begin{titlepage}
 \thispagestyle{firstpage}
 \centering
-\vspace*{1.5cm}
+\osTitleTopSpace{}
 """ + logos_tex + r"""
-{\Huge \textbf{OsdagBridge}}\\[0.3cm]
-{\large Open Source Software for Steel Girder Bridge Design}\\[1.5cm]
-{\Large Design Report}\\[1.5cm]
-\begin{tabular}{|L{4cm}|L{10cm}|}
+{\Huge \textbf{OsdagBridge}}\\[""" + SPACING['title_sub'] + r"""]
+{\large Open Source Software for Steel Girder Bridge Design}\\[""" + SPACING['title_top'] + r"""]
+{\Large Design Report}\\[""" + SPACING['title_top'] + r"""]
+\begin{tabular}{""" + TABLE_SPECS['title_meta'] + r"""}
 \hline
 \textbf{Project Name} & """ + _tex(m.project_name) + r""" \\
 \hline
@@ -230,7 +230,7 @@ def toc_section():
 
 % TOC styling using titletoc
 \titlecontents{chapter}[1.5em]
-  {\normalfont\vspace{2pt}}
+  {\normalfont""" + VSPACE_MINI + r"""}
   {\contentslabel{1.5em}}
   {\hspace*{-1.5em}}
   {\hfill\contentspage}
@@ -470,8 +470,8 @@ class ReportDataBridge:
             if val is not None:
                 ur = float(val)
                 if ur <= 1.0:
-                    return r"\textcolor{black}{PASS}"
-                return r"\textcolor{red}{FAIL}"
+                    return status(True)
+                return status(False)
         except (TypeError, ValueError):
             pass
         return ""
