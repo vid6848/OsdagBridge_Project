@@ -9,7 +9,14 @@ from osdagbridge.core.reports.report_utils import _tex
 PAGE = dict(
     doc_class="report",
     paper="a4paper",
-    margin="1in",
+    top="25mm",
+    bottom="22mm",
+    left="22mm",
+    right="22mm",
+    headheight="18pt",
+    headsep="8mm",
+    footskip="12mm",
+    includeheadfoot=True,
 )
 
 FONT = dict(
@@ -40,7 +47,7 @@ TABLE = dict(
     lt_post="6pt",
     rule_width="0.5pt",
     extrarowheight="0.6pt",
-    needspace_lines=5,
+    needspace_lines=8,
 )
 
 SPACING = dict(
@@ -65,11 +72,9 @@ HEADER_FOOTER = dict(
     foot_right=r"Page \thepage\ of \pageref{LastPage}",
     rule="1pt",
     headrule_gap="2pt",
-    footrule_gap="6pt",
-    footrule_raise="-8pt",
+    footrule_gap="4pt",
     sd_note=r"* Software default value",
-    sd_note_raise="-20pt",
-    sd_note_gap="4pt",
+    sd_note_gap="2pt",
 )
 
 CHART = dict(
@@ -86,6 +91,9 @@ CHART = dict(
 ROW_END = r"\osRowEnd{}"
 ROW_END_LG = r"\osRowEndLg{}"
 ROW_END_SM = r"\osRowEndSm{}"
+ROW_KEEP = r"\osRowKeep{}"
+ROW_KEEP_LG = r"\osRowKeepLg{}"
+ROW_KEEP_SM = r"\osRowKeepSm{}"
 
 VSPACE_TABLE = r"\osTableSpace{}"
 VSPACE_TABLE_LG = r"\osTableSpaceLg{}"
@@ -107,20 +115,23 @@ def colspec(*cols):
     """Generate width-relative column specification for tabular/longtable.
 
     Each argument is a (type_char, width_fraction) tuple, e.g. ('L', 0.35), ('p', 0.65).
-    Column widths are calculated as fractions of \\linewidth minus 2\\tabcolsep
+    Column widths are calculated as fractions of \\linewidth minus 2\\tabcolsep and vertical rules
     so tables fit the text block perfectly without overflow.
     """
     parts = []
+    n_cols = len(cols)
+    extra_rule_adj = f"{1.0 / n_cols:.3f}".rstrip("0").rstrip(".")
     for align, frac in cols:
         pct = f"{frac:.3f}".rstrip("0").rstrip(".")
+        dim = rf"\dimexpr {pct}\linewidth-2\tabcolsep-\arrayrulewidth-{extra_rule_adj}\arrayrulewidth\relax"
         if align == "p":
-            parts.append(rf">{{\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+            parts.append(rf">{{\arraybackslash}}p{{{dim}}}")
         elif align == "C":
-            parts.append(rf">{{\centering\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+            parts.append(rf">{{\centering\arraybackslash}}p{{{dim}}}")
         elif align == "R":
-            parts.append(rf">{{\raggedleft\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+            parts.append(rf">{{\raggedleft\arraybackslash}}p{{{dim}}}")
         elif align == "L":
-            parts.append(rf">{{\raggedright\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+            parts.append(rf">{{\raggedright\arraybackslash}}p{{{dim}}}")
         else:
             parts.append(align)
     return "|" + "|".join(parts) + "|"
@@ -187,8 +198,20 @@ TABLE_SPECS = {
 
 
 def _packages():
+    geom_opts = [
+        PAGE["paper"],
+        f"top={PAGE['top']}",
+        f"bottom={PAGE['bottom']}",
+        f"left={PAGE['left']}",
+        f"right={PAGE['right']}",
+        f"headheight={PAGE['headheight']}",
+        f"headsep={PAGE['headsep']}",
+        f"footskip={PAGE['footskip']}",
+    ]
+    if PAGE.get("includeheadfoot"):
+        geom_opts.append("includeheadfoot")
     return r"""% Packages
-\usepackage[""" + PAGE["paper"] + ", margin=" + PAGE["margin"] + r"""]{geometry}
+\usepackage[""" + ", ".join(geom_opts) + r"""]{geometry}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -207,7 +230,8 @@ def _packages():
     labelfont=""" + FONT["caption_label"] + r""",
     justification=raggedright,
     singlelinecheck=false,
-    format=plain
+    format=plain,
+    skip=4pt
 }
 \usepackage{subcaption}
 \usepackage{multirow}
@@ -260,12 +284,9 @@ def _page_style(name, head_l, head_r):
   \renewcommand{\headrule}{""" + _rule(hf["headrule_gap"]) + r"""}
   \renewcommand{\footrule}{%
     \ifbool{hasSDonPage}{%
-      \vspace{""" + hf["sd_note_raise"] + r"""}%
       \hbox to \headwidth{\textcolor{""" + COLORS["sd_note"] + r"""}{\footnotesize\textit{""" + hf["sd_note"] + r"""}}\hfil}%
-      \vspace{""" + hf["sd_note_gap"] + r"""}%
-    }{%
-      \vspace{""" + hf["footrule_raise"] + r"""}%
-    }%
+      \vskip """ + hf["sd_note_gap"] + r"""%
+    }{}%
     """ + _rule(hf["footrule_gap"]) + r"""%
   }
 }
@@ -279,7 +300,7 @@ def _first_page_style():
   \renewcommand{\headrulewidth}{0pt}
   \fancyfoot[L]{""" + hf["foot_left"] + r"""}
   \fancyfoot[R]{""" + hf["foot_right"] + r"""}
-  \renewcommand{\footrule}{\vspace{""" + hf["footrule_raise"] + "}" + _rule(hf["footrule_gap"]) + r"""}
+  \renewcommand{\footrule}{""" + _rule(hf["footrule_gap"]) + r"""}
 }
 """
 
@@ -313,9 +334,21 @@ def preamble_block(meta):
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
 % Row End and Spacing Macros
-\newcommand{\osRowEnd}{\\[""" + TABLE["row_gap"] + r"""]}
-\newcommand{\osRowEndLg}{\\[""" + TABLE["row_gap_lg"] + r"""]}
-\newcommand{\osRowEndSm}{\\[""" + TABLE["row_gap_sm"] + r"""]}
+\makeatletter
+\def\osRowEnd{\@ifnextchar\bgroup{\osRowEnd@gobble}{\\[""" + TABLE["row_gap"] + r"""]}}
+\def\osRowEnd@gobble#1{\\[""" + TABLE["row_gap"] + r"""]}
+\def\osRowEndLg{\@ifnextchar\bgroup{\osRowEndLg@gobble}{\\[""" + TABLE["row_gap_lg"] + r"""]}}
+\def\osRowEndLg@gobble#1{\\[""" + TABLE["row_gap_lg"] + r"""]}
+\def\osRowEndSm{\@ifnextchar\bgroup{\osRowEndSm@gobble}{\\[""" + TABLE["row_gap_sm"] + r"""]}}
+\def\osRowEndSm@gobble#1{\\[""" + TABLE["row_gap_sm"] + r"""]}
+
+\def\osRowKeep{\@ifnextchar\bgroup{\osRowKeep@gobble}{\\*[""" + TABLE["row_gap"] + r"""]}}
+\def\osRowKeep@gobble#1{\\*[""" + TABLE["row_gap"] + r"""]}
+\def\osRowKeepLg{\@ifnextchar\bgroup{\osRowKeepLg@gobble}{\\*[""" + TABLE["row_gap_lg"] + r"""]}}
+\def\osRowKeepLg@gobble#1{\\*[""" + TABLE["row_gap_lg"] + r"""]}
+\def\osRowKeepSm{\@ifnextchar\bgroup{\osRowKeepSm@gobble}{\\*[""" + TABLE["row_gap_sm"] + r"""]}}
+\def\osRowKeepSm@gobble#1{\\*[""" + TABLE["row_gap_sm"] + r"""]}
+\makeatother
 \newcommand{\osTableSpace}{\vspace{""" + SPACING["table_space"] + r"""}}
 \newcommand{\osTableSpaceLg}{\vspace{""" + SPACING["table_space_lg"] + r"""}}
 \newcommand{\osTableSpaceSm}{\vspace{""" + SPACING["table_space_sm"] + r"""}}
