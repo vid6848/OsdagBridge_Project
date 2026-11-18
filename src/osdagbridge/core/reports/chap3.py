@@ -4,8 +4,11 @@
 # =============================================================================
 
 from osdagbridge.core.utils.common import (
+    KEY_BL_ECCENTRICITY,
     KEY_CB_LOAD,
+    KEY_FOOTPATH,
     KEY_LL_CUSTOM_VEHICLES,
+    KEY_LL_ECCENTRICITY,
     KEY_LL_FOOTPATH_PRESSURE_MODE,
     KEY_LL_FOOTPATH_PRESSURE_VALUE,
     KEY_LL_IRC_70R_BOGIE,
@@ -56,94 +59,186 @@ from osdagbridge.core.utils.common import (
 from osdagbridge.core.reports.report_utils import _tex, _render_value, longtable
 from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, VSPACE_SEC
 
-def ch3_loads(input_dict):
-    # Live load vehicle names mapping
-    vehicles = []
-    if input_dict.get(KEY_LL_IRC_CLASS_A):
-        vehicles.append("Class A")
-    if input_dict.get(KEY_LL_IRC_70R_WHEELED):
-        vehicles.append("Class 70R (Wheeled)")
-    if input_dict.get(KEY_LL_IRC_70R_TRACKED):
-        vehicles.append("Class 70R (Tracked)")
-    if input_dict.get(KEY_LL_IRC_AA_WHEELED):
-        vehicles.append("Class AA (Wheeled)")
-    if input_dict.get(KEY_LL_IRC_AA_TRACKED):
-        vehicles.append("Class AA (Tracked)")
-    if input_dict.get(KEY_LL_IRC_CLASS_SV):
-        vehicles.append("Class SV")
-    if input_dict.get(KEY_LL_IRC_70R_BOGIE):
-        vehicles.append("Class 70R (Bogie)")
-    if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):
-        vehicles.append("Class Fatigue")
 
+def _is_on(val):
+    """Return True for True / 1 / 'True' / '1' / 'yes', False otherwise."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, int):
+        return val != 0
+    return str(val).strip().lower() in ('true', '1', 'yes', 'on')
+
+def ch3_loads(input_dict):
+    from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
+
+    # -------------------------------------------------------------------------
+    # Vehicle live load rows — only ticked vehicles appear
+    # -------------------------------------------------------------------------
+    # Vehicles where IRC 6 gives no braking definition (tracked/bogie types)
+    _NO_BRAKING = {'Class AA (Tracked)', 'Class 70R (Bogie)'}
+
+    # (key, display_name, impact_clause, braking_note)
+    _VEHICLE_DEFS = [
+        (KEY_LL_IRC_CLASS_A,       'Class A',              'Class A',  False),
+        (KEY_LL_IRC_70R_WHEELED,   'Class 70R (Wheeled)',  'AA/70R',   False),
+        (KEY_LL_IRC_70R_TRACKED,   'Class 70R (Tracked)',  'AA/70R',   False),
+        (KEY_LL_IRC_AA_WHEELED,    'Class AA (Wheeled)',   'AA/70R',   False),
+        (KEY_LL_IRC_AA_TRACKED,    'Class AA (Tracked)',   'AA/70R',   True),
+        (KEY_LL_IRC_CLASS_SV,      'Class SV',             'Class A',  False),
+        (KEY_LL_IRC_70R_BOGIE,     'Class 70R (Bogie)',    'AA/70R',   True),
+        (KEY_LL_IRC_CLASS_FATIGUE, 'Class Fatigue',        'Class A',  False),
+    ]
+
+    span = input_dict.get(KEY_SPAN)
+    span_m = None
+    if span not in (None, ''):
+        try:
+            span_m = float(span)
+        except (ValueError, TypeError):
+            span_m = None
+
+    lanes = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
+    lanes_int = None
+    if lanes not in (None, ''):
+        try:
+            lanes_int = int(lanes)
+        except (ValueError, TypeError):
+            lanes_int = None
+
+    # Pre-compute braking force once (same value for all ticked vehicles)
+    braking_kN_str = '---'
+    if lanes_int is not None:
+        try:
+            braking_kN = IRC6_2017.cl_211_2_braking_force(lanes_int)
+            braking_kN_str = f'{braking_kN:.2f} kN'
+        except Exception:
+            braking_kN_str = 'N/A'
+
+    # Eccentricity from input
+    ecc_val = (
+        input_dict.get(KEY_LL_ECCENTRICITY)
+        or input_dict.get(KEY_BL_ECCENTRICITY)
+        or input_dict.get('bl_eccentricity')
+    )
+    if ecc_val not in (None, ''):
+        try:
+            ecc_str = f'{float(ecc_val):.2f} m'
+        except (ValueError, TypeError):
+            ecc_str = f'{ecc_val} m'
+    else:
+        ecc_str = '---'
+
+    # Build one row per ticked vehicle
+    veh_rows = []
+    for key, name, im_cls, no_braking in _VEHICLE_DEFS:
+        if not _is_on(input_dict.get(key)):
+            continue
+
+        # Impact factor
+        if span_m is not None:
+            try:
+                if im_cls == 'Class A':
+                    im = IRC6_2017.cl_208_2_impact_factor(span_m)
+                else:
+                    im = IRC6_2017.cl_208_3_impact_factor(span_m)
+                im_str = f'{1.0 + im:.3f}'
+            except Exception:
+                im_str = 'N/A'
+        else:
+            im_str = 'N/A'
+
+        # Braking
+        if no_braking:
+            br_considered = r'---\textsuperscript{\dag}'
+            br_value      = r'---\textsuperscript{\dag}'
+        else:
+            br_considered = 'Yes'
+            br_value      = braking_kN_str
+
+        veh_rows.append(
+            _tex(name) + r' & ' + im_str + r' & ' + br_considered
+            + r' & ' + br_value + r' & ' + ecc_str
+            + r' \osRowEnd{}' + '\n\\hline'
+        )
+
+    # Custom vehicles if specified
     custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
     if custom and isinstance(custom, list):
         for c in custom:
-            if isinstance(c, dict) and c.get('name'):
-                vehicles.append(c['name'])
-            elif isinstance(c, str):
-                vehicles.append(c)
+            c_name = c.get('name') if isinstance(c, dict) else str(c)
+            if c_name:
+                veh_rows.append(
+                    _tex(c_name) + r' & ' + '---' + r' & ' + '---'
+                    + r' & ' + '---' + r' & ' + ecc_str
+                    + r' \osRowEnd{}' + '\n\\hline'
+                )
 
-    vehicles_str = ", ".join(vehicles) if vehicles else "None"
+    if not veh_rows:
+        veh_rows.append(
+            r'---' + r' & ---' * 4 + r' \osRowEnd{}' + '\n\\hline'
+        )
 
-    from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
-    span = input_dict.get(KEY_SPAN)
-    impact_factor_str = ""
-    if span not in (None, ""):
-        try:
-            span_m = float(span)
-            factors = []
-            if input_dict.get(KEY_LL_IRC_CLASS_A):
-                im_a = IRC6_2017.cl_208_2_impact_factor(span_m)
-                factors.append(f"Class A: {1.0 + im_a:.3f}")
-            is_wheeled_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_WHEELED) or
-                input_dict.get(KEY_LL_IRC_AA_WHEELED) or
-                input_dict.get(KEY_LL_IRC_70R_BOGIE)
-            )
-            is_tracked_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_TRACKED) or
-                input_dict.get(KEY_LL_IRC_AA_TRACKED)
-            )
-            if is_wheeled_heavy or is_tracked_heavy:
-                im_aa = IRC6_2017.cl_208_3_impact_factor(span_m)
-                factors.append(f"Class AA/70R: {1.0 + im_aa:.3f}")
+    veh_body = '\n'.join(veh_rows)
+    veh_hdr  = (
+        r'\textbf{Vehicle} & \textbf{Impact Factor} & \textbf{Braking?}'
+        r' & \textbf{Braking Force (kN)} & \textbf{Eccentricity (m)} \\'
+    )
+    _dag_note = (
+        r'\osNote{\textsuperscript{\dag} No code definition in IRC~6 for this vehicle type.}'
+    )
 
-            if factors:
-                impact_factor_str = ", ".join(factors)
-            else:
-                impact_factor_str = "N/A"
-        except Exception:
-            impact_factor_str = "N/A"
+    # -------------------------------------------------------------------------
+    # Footpath / kerb live load
+    # -------------------------------------------------------------------------
+    fp_cfg   = str(input_dict.get(KEY_FOOTPATH, 'None')).strip()
+    if fp_cfg in ('None', '', 'False', '0'):
+        fp_present = 'No'
     else:
-        impact_factor_str = "N/A"
+        fp_present = f'Yes ({fp_cfg})'
 
-    lanes = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
-    braking_force_str = ""
-    if lanes not in (None, ""):
+    fp_mode  = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_MODE, '')
+    fp_value = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_VALUE, '')
+    if str(fp_mode).strip().lower() in ('as per irc 6', 'as per irc6', 'automatic'):
         try:
-            lanes_int = int(lanes)
-            braking_force_t = IRC6_2017.cl_211_2_braking_force(lanes_int)
-            braking_force_kN = braking_force_t * 9.81
-            braking_force_str = f"{braking_force_kN:.2f} kN ({braking_force_t:.2f} tonnes)"
+            fp_intensity = f'{IRC6_2017.cl_206_1_footway_load():.3f} kN/m\\textsuperscript{{2}}'
+            fp_clause    = 'IRC~6 Cl.~206.1'
+            fp_mode_str  = 'As per IRC 6'
         except Exception:
-            braking_force_str = "N/A"
+            fp_intensity = 'N/A'
+            fp_clause    = 'IRC~6 Cl.~206.1'
+            fp_mode_str  = 'As per IRC 6'
+    elif fp_value not in (None, ''):
+        fp_intensity = f'{float(fp_value):.3f} kN/m\\textsuperscript{{2}}' if fp_value != '' else '---'
+        fp_clause    = 'User defined'
+        fp_mode_str  = 'Custom'
     else:
-        braking_force_str = "N/A"
+        fp_intensity = '---'
+        fp_clause    = '---'
+        fp_mode_str  = '---'
 
-    fp_mode  = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_MODE, "")
-    fp_value = input_dict.get(KEY_LL_FOOTPATH_PRESSURE_VALUE, "")
-    if str(fp_mode).strip().lower() in ("as per irc 6", "as per irc6", "automatic"):
-        try:
-            fp_str = f"{IRC6_2017.cl_206_1_footway_load():.3f} kN/m² (IRC 6 Cl. 206.1)"
-        except Exception:
-            fp_str = "N/A"
-    elif fp_value not in (None, ""):
-        fp_str = f"{fp_value} kN/m²"
-    else:
-        fp_str = "N/A"
+    fp_body = (
+        r'\textnormal{Footpaths Present} & ' + fp_present
+        + r' \osRowEnd{}' + '\n\\hline\n'
+        + r'\textnormal{Load Mode} & ' + _tex(fp_mode_str)
+        + r' \osRowEnd{}' + '\n\\hline\n'
+        + r'\textnormal{Intensity} & ' + fp_intensity
+        + r' \osRowEnd{}' + '\n\\hline\n'
+        + r'\textnormal{Reference Clause} & ' + fp_clause
+        + r' \osRowEnd{}' + '\n\\hline\n'
+    )
+    _hdr2 = r'\textbf{Parameter} & \textbf{Value} \\'
 
+    # -------------------------------------------------------------------------
+    # Centrifugal force note
+    # -------------------------------------------------------------------------
+    _centrifugal_note = (
+        r'\osNote{Centrifugal Force: Not applicable'
+        r' --- straight bridge (skew angle = 0\textdegree{}).}'
+    )
+
+    # -------------------------------------------------------------------------
     # Vz / Pz — prefer stored computed values; fall back to IRC6 Table 12
+    # -------------------------------------------------------------------------
     vz_val = input_dict.get(KEY_WL_HOURLY_MEAN_WIND)
     pz_val = input_dict.get(KEY_WL_HOURLY_WIND_PRESSURE)
     if not vz_val or not pz_val:
@@ -267,8 +362,8 @@ def ch3_loads(input_dict):
 
     lc_rows_str = "\n".join(lc_rows)
 
-    # shared 2-col header
-    _hdr2 = r'\textbf{parameter} & \textbf{value} \\'
+    # shared 2-col header for parameter/value tables
+    _hdr2 = r'\textbf{Parameter} & \textbf{Value} \\'
 
     # Dead Load body
     dl_body = (
@@ -296,22 +391,6 @@ def ch3_loads(input_dict):
         + r'\textnormal{Railing Load} & '
         + _render_value(input_dict, KEY_RL_LOAD_VALUE)
         + r' kN/m\sdstar{} \osRowEnd{}' + '\n\\hline\n'
-    )
-
-    # Live Loads body
-    ll_body = (
-        r'\textnormal{Vehicles Considered} & '
-        + _tex(vehicles_str)
-        + r' \osRowEnd{}' + '\n\\hline\n'
-        + r'\textnormal{Impact Factor (IRC 6)} & '
-        + _tex(impact_factor_str)
-        + r' \osRowEnd{}' + '\n\\hline\n'
-        + r'\textnormal{Braking Load (IRC 6)} & '
-        + _tex(braking_force_str)
-        + r' \osRowEnd{}' + '\n\\hline\n'
-        + r'\textnormal{Footpath Live Load (if applicable)} & '
-        + _tex(fp_str)
-        + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
     # Wind Load body
@@ -408,10 +487,19 @@ def ch3_loads(input_dict):
                     'tab:ch3:dead-load-dw',
                     _hdr2, surf_body)
         + '\n\\osSectionSpace{}\n'
+        + longtable(TABLE_SPECS['five_col_loads'],
+                    'Vehicle Live Loads (LL) --- per IRC~6',
+                    'tab:ch3:vehicle-live-loads',
+                    veh_hdr, veh_body)
+        + '\n'
+        + _dag_note
+        + '\n\n'
+        + _centrifugal_note
+        + '\n\\osSectionSpace{}\n'
         + longtable(TABLE_SPECS['two_col_loads'],
-                    'Live Loads (LL)',
-                    'tab:ch3:live-loads',
-                    _hdr2, ll_body)
+                    'Footpath Live Load --- per IRC~6 Cl.~206.1',
+                    'tab:ch3:footpath-load',
+                    _hdr2, fp_body)
         + '\n\\osSectionSpace{}\n'
         + longtable(TABLE_SPECS['two_col_loads'],
                     'Wind Load (WL) --- per IRC 6',
