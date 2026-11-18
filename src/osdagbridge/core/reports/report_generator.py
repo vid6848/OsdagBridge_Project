@@ -956,14 +956,18 @@ def generate_report(payload, request):
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
 
-            # Generate UR summary chart for Section 5.5
+            # Generate charts for report
             try:
-                from .report_charts import generate_ur_chart
+                from .report_charts import generate_ur_chart, generate_quantity_chart
                 ur_chart_path = os.path.join(tmp_images, 'ur_summary.png')
                 if generate_ur_chart(bridge, ur_chart_path):
                     fig_paths['ur_summary'] = ur_chart_path.replace('\\', '/')
+
+                qty_chart_path = os.path.join(tmp_images, 'quantity_summary.png')
+                if generate_quantity_chart(payload.inputs, qty_chart_path):
+                    fig_paths['quantity_summary'] = qty_chart_path.replace('\\', '/')
             except Exception as e:
-                logger.warning("Could not generate UR summary chart: %s", e)
+                logger.warning("Could not generate report charts: %s", e)
 
             doc_parts = []
             doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
@@ -990,7 +994,7 @@ def generate_report(payload, request):
             if 'drawings' in secs and payload.options.include_figures:
                 doc_parts.append(ch6_drawings(fig_paths))
 
-            doc_parts.append(ch7_quantities(payload.inputs))
+            doc_parts.append(ch7_quantities(payload.inputs, fig_paths))
 
             mode = str(payload.inputs.get(KEY_DESIGN_MODE, "Optimized")).strip().lower()
             is_custom = mode in {"custom", "customized"}
