@@ -24,7 +24,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
     """
     try:
         summary = bridge.utilization_summary()
-        fig = Figure(figsize=(CHART.get("width_in", 6.3), 5.2), dpi=CHART.get("dpi", 200))
+        fig = Figure(figsize=(float(CHART.get("width_in", 6.3)), 5.2), dpi=float(CHART.get("dpi", 200)))
         canvas = FigureCanvasAgg(fig)
         axes = fig.subplots(2, 2)
 
@@ -107,7 +107,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
 
         fig.tight_layout()
         os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
-        canvas.print_figure(output_png_path, dpi=CHART.get("dpi", 200))
+        canvas.print_figure(output_png_path, dpi=float(CHART.get("dpi", 200)))
         return os.path.exists(output_png_path)
     except Exception as exc:
         logger.warning("Failed to generate UR summary chart: %s", exc)
@@ -151,7 +151,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             c_m3 = float(numeric.get("concrete_m3", 0.0) or 0.0)
             r_t = float(numeric.get("rebar_tonnes", 0.0) or 0.0)
 
-        fig = Figure(figsize=(CHART.get("width_in", 6.3), 4.2), dpi=CHART.get("dpi", 200))
+        fig = Figure(figsize=(float(CHART.get("width_in", 6.3)), 4.2), dpi=float(CHART.get("dpi", 200)))
         canvas = FigureCanvasAgg(fig)
         gs = fig.add_gridspec(2, 2, height_ratios=[1.15, 1.0])
 
@@ -208,7 +208,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
 
         fig.tight_layout()
         os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
-        canvas.print_figure(output_png_path, dpi=CHART.get("dpi", 200))
+        canvas.print_figure(output_png_path, dpi=float(CHART.get("dpi", 200)))
         return os.path.exists(output_png_path)
     except Exception as exc:
         logger.warning("Failed to generate quantity summary chart: %s", exc)

@@ -926,7 +926,7 @@ def generate_report(payload, request):
                     p = os.path.join(tmp_images, attr + '.png')
                     with open(p, 'wb') as fh:
                         fh.write(img_bytes)
-                    fig_paths[attr] = p.replace('\\', '/')
+                    fig_paths[attr] = f'images/{attr}.png'
             payload.figure_data.clear()  # bytes no longer needed — free RAM now
 
             # ── Write title-page logos into tmp_dir/assets (auto-deleted) ──
@@ -961,11 +961,11 @@ def generate_report(payload, request):
                 from .report_charts import generate_ur_chart, generate_quantity_chart
                 ur_chart_path = os.path.join(tmp_images, 'ur_summary.png')
                 if generate_ur_chart(bridge, ur_chart_path):
-                    fig_paths['ur_summary'] = ur_chart_path.replace('\\', '/')
+                    fig_paths['ur_summary'] = 'images/ur_summary.png'
 
                 qty_chart_path = os.path.join(tmp_images, 'quantity_summary.png')
                 if generate_quantity_chart(payload.inputs, qty_chart_path):
-                    fig_paths['quantity_summary'] = qty_chart_path.replace('\\', '/')
+                    fig_paths['quantity_summary'] = 'images/quantity_summary.png'
             except Exception as e:
                 logger.warning("Could not generate report charts: %s", e)
 
@@ -1043,6 +1043,19 @@ def generate_report(payload, request):
                 shutil.copy2(tmp_tex, tex_path)
             if os.path.exists(tmp_pdf):
                 shutil.copy2(tmp_pdf, pdf_path)
+
+            # Copy assets and images to output_dir so saved .tex is fully compilable standalone
+            out_assets = os.path.join(request.output_dir, 'assets')
+            if os.path.exists(tmp_assets):
+                if os.path.exists(out_assets):
+                    shutil.rmtree(out_assets)
+                shutil.copytree(tmp_assets, out_assets)
+
+            out_images = os.path.join(request.output_dir, 'images')
+            if os.path.exists(tmp_images):
+                if os.path.exists(out_images):
+                    shutil.rmtree(out_images)
+                shutil.copytree(tmp_images, out_images)
 
         if os.path.exists(pdf_path):
             logger.info("Report generated: %s", pdf_path)
