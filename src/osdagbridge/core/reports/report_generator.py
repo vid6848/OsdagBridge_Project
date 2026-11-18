@@ -510,6 +510,182 @@ class ReportDataBridge:
         except Exception:
             return ""
 
+    def utilization_summary(self) -> dict:
+        """
+        Collect numeric utilization ratios (UR / DCR) for all structural components.
+        Reuses the exact data sources and worst-case logic of Table 5.22.
+        Returns:
+            {
+                "girders": [(label, ur), ...],
+                "deck": [(label, ur), ...],
+                "cross_bracing": [(label, ur), ...],
+                "end_diaphragm": {
+                    "designed": bool,
+                    "message": str,
+                    "items": [(label, ur), ...]
+                }
+            }
+        """
+        from osdagbridge.core.utils.common import (
+            KEY_DD_HAS_OVERHANG,
+            KEY_DD_M_ULS_HOG,
+            KEY_DD_M_ULS_OH,
+            KEY_DD_M_ULS_SAG,
+            KEY_DD_MU_BOT,
+            KEY_DD_MU_OH,
+            KEY_DD_MU_TOP,
+            KEY_DD_PUNCH_VED,
+            KEY_DD_SHEAR_VED,
+            KEY_DD_SHEAR_VRDC,
+            KEY_DD_VRD_C_MPA,
+            KEY_DD_WK_BOT,
+            KEY_DD_WK_LIMIT,
+            KEY_DD_WK_OH,
+            KEY_DD_WK_TOP,
+            KEY_MP_ED_TYPE,
+        )
+
+        summary = {
+            "girders": [],
+            "deck": [],
+            "cross_bracing": [],
+            "end_diaphragm": {
+                "designed": False,
+                "message": "Not designed in this version",
+                "items": [],
+            },
+        }
+
+        # 1. Plate Girders: max DCR per girder
+        pg = (self.output_dict.get("design_results", {}) or {}).get("per_girder", {}) or {}
+
+        def _gkey(k):
+            try:
+                return (0, int(str(k).replace("G", "")))
+            except ValueError:
+                return (1, str(k))
+
+        for g in sorted(pg.keys(), key=_gkey):
+            if str(g).startswith("EB"):
+                continue
+            gd = pg.get(g) or {}
+            max_dcr = 0.0
+            found = False
+            for chk in (gd.get("checks") or []):
+                d = chk.get("dcr")
+                if d is not None:
+                    try:
+                        df = float(d)
+                        if df > max_dcr:
+                            max_dcr = df
+                        found = True
+                    except (TypeError, ValueError):
+                        pass
+            for _lc, _ld in (gd.get("per_lc") or {}).items():
+                if str(_lc).lower().startswith("envelope"):
+                    continue
+                for chk in (_ld.get("checks") or []):
+                    d = chk.get("dcr")
+                    if d is not None:
+                        try:
+                            df = float(d)
+                            if df > max_dcr:
+                                max_dcr = df
+                            found = True
+                        except (TypeError, ValueError):
+                            pass
+            if found:
+                summary["girders"].append((str(g), round(max_dcr, 3)))
+
+        # 2. Deck Slab: checks matching Table 5.22
+        dr = self.output_dict.get("deck_report_values", {}) or {}
+        if dr:
+            def _dv(k):
+                try:
+                    return float(dr.get(k, 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            has_oh = bool(dr.get(KEY_DD_HAS_OVERHANG, False))
+
+            deck_checks = [
+                ("Sagging", KEY_DD_M_ULS_SAG, KEY_DD_MU_BOT),
+                ("Hogging", KEY_DD_M_ULS_HOG, KEY_DD_MU_TOP),
+            ]
+            if has_oh:
+                deck_checks.append(("Overhang", KEY_DD_M_ULS_OH, KEY_DD_MU_OH))
+            deck_checks.extend([
+                ("Punching", KEY_DD_PUNCH_VED, KEY_DD_VRD_C_MPA),
+                ("One-Way", KEY_DD_SHEAR_VED, KEY_DD_SHEAR_VRDC),
+            ])
+
+            for label, dem_k, cap_k in deck_checks:
+                dem = _dv(dem_k)
+                cap = _dv(cap_k)
+                if cap > 0:
+                    summary["deck"].append((label, round(dem / cap, 3)))
+
+            # Crack width
+            wk_lim = _dv(KEY_DD_WK_LIMIT)
+            if wk_lim > 0:
+                wks = [_dv(KEY_DD_WK_BOT), _dv(KEY_DD_WK_TOP)]
+                if has_oh:
+                    wks.append(_dv(KEY_DD_WK_OH))
+                gov_wk = max(wks) if wks else 0.0
+                if gov_wk > 0:
+                    summary["deck"].append(("Crack Width", round(gov_wk / wk_lim, 3)))
+
+        # 3. Cross Bracing: max UR per girder pair
+        cb_pairs = self.get_cb_pairs()
+        for pair in cb_pairs:
+            pair_max_ur = 0.0
+            found = False
+            for member in ("diagonal", "chord"):
+                for force_type in ("compression", "tension"):
+                    eff = self.get_cb_efficiency(pair, member, force_type)
+                    if eff:
+                        try:
+                            eff_f = float(eff)
+                            if eff_f > pair_max_ur:
+                                pair_max_ur = eff_f
+                            found = True
+                        except (TypeError, ValueError):
+                            pass
+                sl = self.get_cb_slenderness(pair, member)
+                if sl:
+                    try:
+                        sl_f = float(sl)
+                        lim = 400.0 if member == "chord" else 250.0
+                        ratio = sl_f / lim
+                        if ratio > pair_max_ur:
+                            pair_max_ur = ratio
+                        found = True
+                    except (TypeError, ValueError):
+                        pass
+            if found:
+                summary["cross_bracing"].append((str(pair), round(pair_max_ur, 3)))
+
+        # 4. End Diaphragms: check if bracing vs rolled/welded
+        ed_type = ""
+        for k, v in self.input_dict.items():
+            if str(k).startswith(KEY_MP_ED_TYPE) and v:
+                ed_type = str(v)
+                break
+        if "brac" in ed_type.strip().lower() and summary["cross_bracing"]:
+            summary["end_diaphragm"] = {
+                "designed": True,
+                "message": "",
+                "items": list(summary["cross_bracing"]),
+            }
+        else:
+            summary["end_diaphragm"] = {
+                "designed": False,
+                "message": "Not designed in this version",
+                "items": [],
+            }
+
+        return summary
+
 def _format_project_location(pl_data):
     if not pl_data:
         return ''
@@ -780,6 +956,15 @@ def generate_report(payload, request):
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
 
+            # Generate UR summary chart for Section 5.5
+            try:
+                from .report_charts import generate_ur_chart
+                ur_chart_path = os.path.join(tmp_images, 'ur_summary.png')
+                if generate_ur_chart(bridge, ur_chart_path):
+                    fig_paths['ur_summary'] = ur_chart_path.replace('\\', '/')
+            except Exception as e:
+                logger.warning("Could not generate UR summary chart: %s", e)
+
             doc_parts = []
             doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
             doc_parts.append(title_page(payload.metadata, osdag_logo_latex, org_logo_latex))
@@ -801,7 +986,7 @@ def generate_report(payload, request):
             if 'analysis' in secs:
                 doc_parts.append(ch4_analysis(payload.analysis_summary, fig_paths, bridge, span_m))
             if 'design_checks' in secs:
-                doc_parts.append(ch5_design_checks(payload.design_checks, bridge))
+                doc_parts.append(ch5_design_checks(payload.design_checks, bridge, fig_paths))
             if 'drawings' in secs and payload.options.include_figures:
                 doc_parts.append(ch6_drawings(fig_paths))
 
