@@ -53,7 +53,7 @@ from osdagbridge.core.utils.common import (
     KEY_WL_VERTICAL_WIND_FORCE
 )
 
-from osdagbridge.core.reports.report_utils import _tex, _render_value
+from osdagbridge.core.reports.report_utils import _tex, _render_value, longtable
 
 def ch3_loads(input_dict):
     # Live load vehicle names mapping
@@ -74,7 +74,7 @@ def ch3_loads(input_dict):
         vehicles.append("Class 70R (Bogie)")
     if input_dict.get(KEY_LL_IRC_CLASS_FATIGUE):
         vehicles.append("Class Fatigue")
-    
+
     custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
     if custom and isinstance(custom, list):
         for c in custom:
@@ -82,7 +82,7 @@ def ch3_loads(input_dict):
                 vehicles.append(c['name'])
             elif isinstance(c, str):
                 vehicles.append(c)
-                
+
     vehicles_str = ", ".join(vehicles) if vehicles else "None"
 
     from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
@@ -96,18 +96,18 @@ def ch3_loads(input_dict):
                 im_a = IRC6_2017.cl_208_2_impact_factor(span_m)
                 factors.append(f"Class A: {1.0 + im_a:.3f}")
             is_wheeled_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_WHEELED) or 
-                input_dict.get(KEY_LL_IRC_AA_WHEELED) or 
+                input_dict.get(KEY_LL_IRC_70R_WHEELED) or
+                input_dict.get(KEY_LL_IRC_AA_WHEELED) or
                 input_dict.get(KEY_LL_IRC_70R_BOGIE)
             )
             is_tracked_heavy = (
-                input_dict.get(KEY_LL_IRC_70R_TRACKED) or 
+                input_dict.get(KEY_LL_IRC_70R_TRACKED) or
                 input_dict.get(KEY_LL_IRC_AA_TRACKED)
             )
             if is_wheeled_heavy or is_tracked_heavy:
                 im_aa = IRC6_2017.cl_208_3_impact_factor(span_m)
                 factors.append(f"Class AA/70R: {1.0 + im_aa:.3f}")
-            
+
             if factors:
                 impact_factor_str = ", ".join(factors)
             else:
@@ -266,131 +266,173 @@ def ch3_loads(input_dict):
 
     lc_rows_str = "\n".join(lc_rows)
 
-    return r"""
-\chapter{Loads and Load Combinations}
+    # shared 2-col header
+    _hdr2 = r'\textbf{parameter} & \textbf{value} \\'
 
-This section summarizes all loads applied to the bridge and the load combinations considered for analysis and design.
+    # Dead Load body
+    dl_body = (
+        r'\textnormal{Steel Self-Weight Applied} & '
+        + _render_value(input_dict, KEY_MATERIAL_GIRDER_DENSITY, r' kN/m\textsuperscript{3}')
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Concrete Deck Weight} & '
+        + _render_value(input_dict, KEY_MATERIAL_DECK_DENSITY, r' kN/m\textsuperscript{3}')
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Self-Weight Factor} & '
+        + _render_value(input_dict, KEY_PL_SELF_WEIGHT_FACTOR)
+        + r' \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Dead Load -- Self Weight}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Steel Self-Weight Applied} & """ + (_render_value(input_dict, KEY_MATERIAL_GIRDER_DENSITY, ' kN/m\\textsuperscript{3}')) + r""" \\[6pt]
-\hline
-\textnormal{Concrete Deck Weight} & """ + (_render_value(input_dict, KEY_MATERIAL_DECK_DENSITY, ' kN/m\\textsuperscript{3}')) + r""" \\[6pt]
-\hline
-\textnormal{Self-Weight Factor} & """ + (_render_value(input_dict, KEY_PL_SELF_WEIGHT_FACTOR)) + r""" \\[6pt]
-\hline
-\end{longtable}
+    # Surfacing body
+    surf_body = (
+        r'\textnormal{Wearing Course Load} & '
+        + _render_value(input_dict, KEY_WC_MATERIAL)
+        + r' x '
+        + _render_value(input_dict, KEY_WC_THICKNESS)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Additional SIDL (Crash Barrier)} & '
+        + _render_value(input_dict, KEY_CB_LOAD)
+        + r' kN/m per barrier \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Railing Load} & '
+        + _render_value(input_dict, KEY_RL_LOAD_VALUE)
+        + r' kN/m\sdstar{} \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Dead Load for Surfacing (DW)}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Wearing Course Load} & """ + (_render_value(input_dict, KEY_WC_MATERIAL)) + r""" x """ + (_render_value(input_dict, KEY_WC_THICKNESS)) + r""" \\[6pt]
-\hline
-\textnormal{Additional SIDL (Crash Barrier)} & """ + (_render_value(input_dict, KEY_CB_LOAD)) + r""" kN/m per barrier \\[6pt]
-\hline
-\textnormal{Railing Load} & """ + (_render_value(input_dict, KEY_RL_LOAD_VALUE)) + r""" kN/m\sdstar{} \\[6pt]
-\hline
-\end{longtable}
+    # Live Loads body
+    ll_body = (
+        r'\textnormal{Vehicles Considered} & '
+        + _tex(vehicles_str)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Impact Factor (IRC 6)} & '
+        + _tex(impact_factor_str)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Braking Load (IRC 6)} & '
+        + _tex(braking_force_str)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Footpath Live Load (if applicable)} & '
+        + _tex(fp_str)
+        + r' \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Live Loads (LL)}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Vehicles Considered} & """ + _tex(vehicles_str) + r""" \\[6pt]
-\hline
-\textnormal{Impact Factor (IRC 6)} & """ + _tex(impact_factor_str) + r""" \\[6pt]
-\hline
-\textnormal{Braking Load (IRC 6)} & """ + _tex(braking_force_str) + r""" \\[6pt]
-\hline
-\textnormal{Footpath Live Load (if applicable)} & """ + (_render_value(input_dict, KEY_LL_FOOTPATH_PRESSURE_VALUE, ' kN/m\\textsuperscript{2}')) + r""" \\[6pt]
-\hline
-\end{longtable}
+    # Wind Load body
+    wl_body = (
+        r'\textnormal{Basic Wind Speed, Vb} & '
+        + _render_value(input_dict, 'wind_speed', ' m/s')
+        + r' [from Project Location] \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Terrain Type} & '
+        + _render_value(input_dict, KEY_WL_TERRAIN_TYPE)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Average Exposed Height, H (m)} & '
+        + _render_value(input_dict, KEY_WL_AVG_EXPOSED_HEIGHT, ' m')
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Hourly Mean Wind Speed, Vz} & '
+        + vz_str
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Hourly Wind Pressure, Pz} & '
+        + pz_str
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Transverse Wind Force} & '
+        + _render_value(input_dict, KEY_WL_TRANSVERSE_WIND_FORCE, ' kN')
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Longitudinal Wind Force} & '
+        + _render_value(input_dict, KEY_WL_LONGITUDINAL_WIND_FORCE, ' kN')
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Vertical Wind Force} & '
+        + _render_value(input_dict, KEY_WL_VERTICAL_WIND_FORCE, ' kN')
+        + r' \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Wind Load (WL) --- per IRC 6}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Basic Wind Speed, Vb} & """ + (_render_value(input_dict,'wind_speed', ' m/s')) + r""" [from Project Location] \\[6pt]
-\hline
-\textnormal{Terrain Type} & """ + (_render_value(input_dict, KEY_WL_TERRAIN_TYPE)) + r""" \\[6pt]
-\hline
-\textnormal{Average Exposed Height, H (m)} & """ + (_render_value(input_dict, KEY_WL_AVG_EXPOSED_HEIGHT, ' m')) + r""" \\[6pt]
-\hline
-\textnormal{Hourly Mean Wind Speed, Vz} & """ + (_render_value(input_dict, KEY_WL_HOURLY_MEAN_WIND, ' m/s')) + r""" \\[6pt]
-\hline
-\textnormal{Hourly Wind Pressure, Pz} & """ + (_render_value(input_dict, KEY_WL_HOURLY_WIND_PRESSURE, ' N/m\\textsuperscript{2}')) + r""" \\[6pt]
-\hline
-\textnormal{Transverse Wind Force} & """ + (_render_value(input_dict, KEY_WL_TRANSVERSE_WIND_FORCE, ' kN')) + r""" \\[6pt]
-\hline
-\textnormal{Longitudinal Wind Force} & """ + (_render_value(input_dict, KEY_WL_LONGITUDINAL_WIND_FORCE, ' kN')) + r""" \\[6pt]
-\hline
-\textnormal{Vertical Wind Force} & """ + (_render_value(input_dict, KEY_WL_VERTICAL_WIND_FORCE, ' kN')) + r""" \\[6pt]
-\hline
-\end{longtable}
+    # Earthquake body
+    el_body = (
+        r'\textnormal{Seismic Zone} & '
+        + _render_value(input_dict, 'seismic_zone')
+        + r' [from Project Location] \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Zone Factor, Z} & '
+        + _sl(sl_zone_factor)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Importance Factor, I} & '
+        + _render_value(input_dict, KEY_SL_IMPORTANCE_FACTOR)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Type of Soil} & '
+        + _render_value(input_dict, KEY_SL_SOIL_TYPE)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Sa/g} & '
+        + _sl(sl_spectral)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Horizontal Seismic Coefficient, Ah} & '
+        + _sl(sl_ah)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Vertical Seismic Coefficient, Av} & '
+        + _sl(sl_av)
+        + r' \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Horizontal Seismic Force (longitudinal)} & '
+        + r' kN \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Horizontal Seismic Force (transverse)} & '
+        + r' kN \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Earthquake Load (EL) --- per IRC 6}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Seismic Zone} & """ + (_render_value(input_dict,'seismic_zone')) + r""" [from Project Location] \\[6pt]
-\hline
-\textnormal{Zone Factor, Z} & """ + (_render_value(input_dict, KEY_SL_ZONE_FACTOR)) + r""" \\[6pt]
-\hline
-\textnormal{Importance Factor, I} & """ + (_render_value(input_dict, KEY_SL_IMPORTANCE_FACTOR)) + r""" \\[6pt]
-\hline
-\textnormal{Type of Soil} & """ + (_render_value(input_dict, KEY_SL_SOIL_TYPE)) + r""" \\[6pt]
-\hline
-\textnormal{Sa/g} & """ + (_render_value(input_dict, KEY_SL_SPECTRAL_COEFF)) + r""" \\[6pt]
-\hline
-\textnormal{Horizontal Seismic Coefficient, Ah} & """ + (_render_value(input_dict, KEY_SL_HORIZONTAL_COEFF)) + r""" \\[6pt]
-\hline
-\textnormal{Vertical Seismic Coefficient, Av} & """ + (_render_value(input_dict, KEY_SL_VERTICAL_COEFF)) + r""" \\[6pt]
-\hline
-\textnormal{Horizontal Seismic Force (longitudinal)} & """ + '' + r""" kN \\[6pt]
-\hline
-\textnormal{Horizontal Seismic Force (transverse)} & """ + '' + r""" kN \\[6pt]
-\hline
-\end{longtable}
+    # Temperature body
+    tl_body = (
+        r'\textnormal{Maximum Shade Temperature} & '
+        + _render_value(input_dict, 'shade_temp_max')
+        + r' $^\circ$C \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Minimum Shade Temperature} & '
+        + _render_value(input_dict, 'shade_temp_min')
+        + r' $^\circ$C \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Effective Bridge Temp. Range} & '
+        + tl_temp_min + r' to ' + tl_temp_max
+        + r' $^\circ$C \\[6pt]' + '\n\\hline\n'
+        + r'\textnormal{Temperature Rise / Fall for Design} & +'
+        + tl_rise
+        + r' $^\circ$C / \textminus{}'
+        + tl_fall
+        + r' $^\circ$C \\[6pt]' + '\n\\hline\n'
+    )
 
-\vspace{1em}
-\begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Temperature Load (TL) --- per IRC 6}}
-\hline
-\textbf{parameter} & \textbf{value} \\
-\hline
-\textnormal{Maximum Shade Temperature} & """ + (_render_value(input_dict,'shade_temp_max')) + r""" $^\circ$C \\[6pt]
-\hline
-\textnormal{Minimum Shade Temperature} & """ + (_render_value(input_dict,'shade_temp_min')) + r""" $^\circ$C \\[6pt]
-\hline
-\textnormal{Effective Bridge Temp. Range} & """ + (_render_value(input_dict, KEY_TL_BRIDGE_TEMP_MIN)) + r""" to """ + (_render_value(input_dict, KEY_TL_BRIDGE_TEMP_MAX)) + r""" $^\circ$C \\[6pt]
-\hline
-\textnormal{Temperature Rise / Fall for Design} & +""" + (_render_value(input_dict, KEY_TL_TEMP_RISE)) + r""" $^\circ$C / \textminus{}""" + (_render_value(input_dict, KEY_TL_TEMP_FALL)) + r""" $^\circ$C \\[6pt]
-\hline
-\end{longtable}
+    # Load Combinations body
+    lc_hdr  = r'\textbf{Combination ID} & \textbf{Load Cases} \\[6pt]'
+    lc_body = lc_rows_str + '\n'
 
-\vspace{1em}
-\begin{longtable}{|C{4.0cm}|p{11.5cm}|}
-\caption{\textbf{Load Combinations}}
-\hline
-\textbf{Combination ID} & \textbf{Load Cases} \\[6pt]
-\hline
-""" + lc_rows_str + r"""
-\end{longtable}
-
-\noindent\textit{Note: All IRC 6 load combinations are auto-generated by OsdagBridge. User-defined custom combinations, if any, are appended.}
-"""
-
-
+    return (
+        r'\chapter{Loads and Load Combinations}' + '\n\n'
+        r'This section summarizes all loads applied to the bridge and the load'
+        r' combinations considered for analysis and design.'
+        + '\n\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Dead Load -- Self Weight',
+                    'tab:ch3:dead-load-sw',
+                    _hdr2, dl_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Dead Load for Surfacing (DW)',
+                    'tab:ch3:dead-load-dw',
+                    _hdr2, surf_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Live Loads (LL)',
+                    'tab:ch3:live-loads',
+                    _hdr2, ll_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Wind Load (WL) --- per IRC 6',
+                    'tab:ch3:wind-load',
+                    _hdr2, wl_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Earthquake Load (EL) --- per IRC 6',
+                    'tab:ch3:earthquake',
+                    _hdr2, el_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|L{5.5cm}|p{10.0cm}|',
+                    'Temperature Load (TL) --- per IRC 6',
+                    'tab:ch3:temperature',
+                    _hdr2, tl_body)
+        + '\n\\vspace{1em}\n'
+        + longtable('|C{4.0cm}|p{11.5cm}|',
+                    'Load Combinations',
+                    'tab:ch3:load-combos',
+                    lc_hdr, lc_body)
+        + '\n\n'
+        r'\noindent\textit{Note: All IRC 6 load combinations are auto-generated by OsdagBridge.'
+        r' User-defined custom combinations, if any, are appended.}'
+        + '\n'
+    )
