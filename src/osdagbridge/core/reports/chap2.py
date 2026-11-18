@@ -143,9 +143,6 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
     return (r"""
 \chapter{Input Parameters}
 
-\setlength{\abovecaptionskip}{2pt}
-\setlength{\belowcaptionskip}{2pt}
-
 This section documents all inputs provided to OsdagBridge. User-provided inputs are clearly distinguished from software-assumed defaults. Where the user did not supply a value, the software has applied the IRC/IS code default or an empirical guideline; these are annotated with an asterisk (\sdstar{}).
 
 \section{Basic Inputs (User-Defined)}
@@ -156,7 +153,7 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \begin{table}[H]
 \caption{\textbf{Project Location}}
 \label{subsec:project-location}
-\begin{tabular}{" + TABLE_SPECS["two_col_wide_val"] + r"}
+\begin{tabular}{""" + TABLE_SPECS["two_col_wide_val"] + r"""}
 \hline
 \textbf{parameter} & \textbf{value} \\
 \hline
@@ -177,7 +174,7 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \begin{table}[H]
 \caption{\textbf{Bridge Geometry}}
 \label{subsec:bridge-geometry}
-\begin{tabular}{" + TABLE_SPECS["two_col_wide_val"] + r"}
+\begin{tabular}{""" + TABLE_SPECS["two_col_wide_val"] + r"""}
 \hline
 \textbf{parameter} & \textbf{value} \\
 \hline
@@ -200,7 +197,7 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \begin{table}[H]
 \caption{\textbf{Material Selection}}
 \label{subsec:material}
-\begin{tabular}{" + TABLE_SPECS["two_col_wide_val"] + r"}
+\begin{tabular}{""" + TABLE_SPECS["two_col_wide_val"] + r"""}
 \hline
 \textbf{parameter} & \textbf{value} \\
 \hline
