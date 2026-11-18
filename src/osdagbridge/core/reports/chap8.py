@@ -3,6 +3,7 @@ from typing import List
 from osdagbridge.core.utils.common import (
     KEY_DESIGN_MODE
 )
+from osdagbridge.core.reports.styles import TABLE_SPECS, VSPACE_SEC
 
 
 def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
@@ -23,13 +24,13 @@ def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
                 upper = line.upper()
                 if 'WARNING' in upper:
                     lines_tex.append(
-                        rf'\textcolor{{blue}}{{{escaped}}}\\')
+                        rf'\osLogWarn{{{escaped}}}\\' + '\n')
                 elif 'ERROR' in upper:
                     lines_tex.append(
-                        rf'\textcolor{{red}}{{{escaped}}}\\')
+                        rf'\osLogError{{{escaped}}}\\' + '\n')
                 elif 'INFO' in upper:
                     lines_tex.append(
-                        rf'\textcolor{{osdagGreen}}{{{escaped}}}\\')
+                        rf'\osLogInfo{{{escaped}}}\\' + '\n')
                 else:
                     continue  # skip lines without a known level — Osdag patter
 
@@ -53,13 +54,13 @@ design modules, and notes the limitations of the current software version.
 The following Indian Road Congress (IRC) codes and Indian Standards (IS) 
 form the basis of all design calculations in this software.
 
-\vspace{0.5cm}
+\osSectionSpace{}
 
 \begingroup
 \setlength{\tabcolsep}{3.5pt}
 \begin{table}[H]
 \caption{\textbf{IRC Codes}}
-\begin{tabular}{|c|c|p{13cm}|}
+\begin{tabular}{""" + TABLE_SPECS["ch8_history"] + r"""}
 \hline
 \textbf{Code} & \textbf{Year} & \textbf{Title / Scope} \\ 
 \hline
@@ -77,12 +78,13 @@ IRC SP 114 & 2018 & Seismic Design of Road Bridges \\
 \hline
 \end{tabular}
 \end{table}
+\endgroup
 
 \begingroup
 \setlength{\tabcolsep}{3.5pt}
 \begin{table}[H]
 \caption{\textbf{IS Codes}}
-\begin{tabular}{|c|c|p{13cm}|}
+\begin{tabular}{""" + TABLE_SPECS["ch8_history"] + r"""}
 \hline
 \textbf{Code} & \textbf{Year} & \textbf{Scope} \\
 \hline
@@ -98,6 +100,7 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 \hline
 \end{tabular}
 \end{table}
+\endgroup
 
 \clearpage
 \section{Analysis and Design Assumptions of This Version}
@@ -117,7 +120,7 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 
 \begin{itemize}
     \item Full shear connection is assumed at ULS with headed stud connectors designed per IRC 22:2015 Cl.606.
-    \item Short-term composite section properties (modular ratio $n = E_s/E_{cm}$) are used for ULS checks.
+    \item Short-term composite section properties (modular ratio $n = E_s/E_c$) are used for ULS checks.
     \item Long-term composite section properties (with creep-adjusted modular ratio) are used for SLS deflection and crack-width checks.
     \item Pre-composite stage: the steel girder alone resists all construction loads prior to concrete gaining strength.
 \end{itemize}
