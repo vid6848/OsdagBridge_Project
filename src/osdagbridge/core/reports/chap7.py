@@ -1,4 +1,5 @@
 from osdagbridge.core.reports.report_utils import longtable
+from osdagbridge.core.reports.styles import TABLE_SPECS
 
 def ch7_quantities(input_dict):
     def _v(key):
@@ -67,7 +68,7 @@ def ch7_quantities(input_dict):
         r'\noindent\textbf{Table 7.1  Bill of Materials'
         r' (Steel, Concrete, and Reinforcement Quantities)}' + '\n\n'
         + longtable(
-            '|C{1.0cm}|L{3.8cm}|C{2.6cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|',
+            TABLE_SPECS['ch7_boq'],
             'Bill of Materials',
             'tab:ch7:boq',
             hdr,
