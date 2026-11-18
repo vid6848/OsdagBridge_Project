@@ -1,7 +1,7 @@
 """Formatting values for the design report, kept in one place.
 
-The values below are the ones the report already used, so the PDF looks
-the same. Change a value here instead of editing the chapter files.
+The values below are the single source of truth for the report styling,
+geometry, fonts, colors, spacing, and table metrics.
 """
 from osdagbridge.core.reports.report_utils import _tex
 
@@ -14,30 +14,48 @@ PAGE = dict(
 
 FONT = dict(
     size="12pt",
-    linespread=1.15,           # used with \setstretch
+    linespread=1.15,
     caption_label="bf",
 )
 
 COLORS = dict(
     brand="91B014",            # osdagGreen
+    pass_="2E7D32",            # green for passing checks
+    fail="C62828",             # red for failing checks
+    warn="E65100",             # amber/orange for warnings
+    info="0277BD",             # blue for informational messages
     sd_note="black",           # "* Software default value" note
     todo_bg="yellow",
 )
 
 TABLE = dict(
     tabcolsep="6pt",
-    arraystretch=1.12,
+    arraystretch=1.2,
+    row_gap="6pt",
+    row_gap_lg="8pt",
+    row_gap_sm="3pt",
     lt_left=r"\fill",
     lt_right=r"\fill",
     lt_pre="0pt",
     lt_post="6pt",
     rule_width="0.5pt",
     extrarowheight="0.6pt",
-    needspace_lines=5,         # break page first if less space is left
+    needspace_lines=5,
 )
 
 SPACING = dict(
-    title_gap="2cm",           # gap in \title before "Design Report"
+    title_gap="2cm",
+    title_top="1.5cm",
+    title_sub="0.3cm",
+    title_block="1cm",
+    table_space="0.4cm",
+    table_space_lg="0.8cm",
+    table_space_sm="0.2cm",
+    section_gap="0.5cm",
+    small_gap="4pt",
+    mini_gap="2pt",
+    fig_pre="-0.5em",
+    fig_post="0.5em",
 )
 
 HEADER_FOOTER = dict(
@@ -54,8 +72,118 @@ HEADER_FOOTER = dict(
     sd_note_gap="4pt",
 )
 
-# no charts in the report yet, values get added with the chart code
-CHART = dict()
+CHART = dict(
+    width_in=6.3,
+    dpi=200,
+    threshold_color="red",
+    threshold_style="--",
+    pass_color="#91B014",
+    fail_color="#C62828",
+    grid="#E3E3E3",
+)
+
+# LaTeX macro shortcuts and Python spacing tokens
+ROW_END = r"\osRowEnd{}"
+ROW_END_LG = r"\osRowEndLg{}"
+ROW_END_SM = r"\osRowEndSm{}"
+
+VSPACE_TABLE = r"\osTableSpace{}"
+VSPACE_TABLE_LG = r"\osTableSpaceLg{}"
+VSPACE_TABLE_SM = r"\osTableSpaceSm{}"
+VSPACE_SEC = r"\osSectionSpace{}"
+VSPACE_SMALL = r"\osSmallSpace{}"
+VSPACE_MINI = r"\osMiniSpace{}"
+VSPACE_TITLE_TOP = r"\osTitleTopSpace{}"
+
+
+def status(ok, text=None):
+    """Format PASS or FAIL badge using central style macros."""
+    if ok:
+        return r"\osPass{}" if text is None else rf"\osPassText{{{text}}}"
+    return r"\osFail{}" if text is None else rf"\osFailText{{{text}}}"
+
+
+def colspec(*cols):
+    """Generate width-relative column specification for tabular/longtable.
+
+    Each argument is a (type_char, width_fraction) tuple, e.g. ('L', 0.35), ('p', 0.65).
+    Column widths are calculated as fractions of \\linewidth minus 2\\tabcolsep
+    so tables fit the text block perfectly without overflow.
+    """
+    parts = []
+    for align, frac in cols:
+        pct = f"{frac:.3f}".rstrip("0").rstrip(".")
+        if align == "p":
+            parts.append(rf">{{\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+        elif align == "C":
+            parts.append(rf">{{\centering\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+        elif align == "R":
+            parts.append(rf">{{\raggedleft\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+        elif align == "L":
+            parts.append(rf">{{\raggedright\arraybackslash}}p{{\dimexpr {pct}\linewidth-2\tabcolsep\relax}}")
+        else:
+            parts.append(align)
+    return "|" + "|".join(parts) + "|"
+
+
+# Central mapping of all table column specifications across the report
+TABLE_SPECS = {
+    # 2 columns
+    "ch1_info": colspec(("L", 0.38), ("L", 0.62)),
+    "two_col_desc": colspec(("L", 0.35), ("p", 0.65)),
+    "two_col_wide_val": colspec(("L", 0.38), ("L", 0.62)),
+    "two_col_loads": colspec(("L", 0.35), ("p", 0.65)),
+    "two_col_combos": colspec(("C", 0.25), ("p", 0.75)),
+    "two_col_defl": colspec(("L", 0.45), ("p", 0.55)),
+    "title_meta": colspec(("L", 0.28), ("L", 0.72)),
+    # Chapter 2 multi-column
+    "ch2_girder_info": colspec(("L", 0.14), ("L", 0.12), ("p", 0.25), ("p", 0.25), ("p", 0.24)),
+    "ch2_girder_dim": colspec(("L", 0.12), ("L", 0.15), ("L", 0.12), ("p", 0.31), ("p", 0.30)),
+    "ch2_girder_restraint": colspec(("L", 0.10), ("p", 0.16), ("p", 0.16), ("p", 0.22), ("p", 0.18), ("p", 0.18)),
+    "ch2_bracing": colspec(("L", 0.15), ("L", 0.15), ("L", 0.20), ("L", 0.18), ("C", 0.16), ("C", 0.16)),
+    # Chapter 4
+    "ch4_demands": colspec(("C", 0.18), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.13), ("C", 0.13)),
+    "ch4_reactions": colspec(("C", 0.33), ("C", 0.33), ("C", 0.34)),
+    "ch4_deflection": colspec(("L", 0.45), ("p", 0.55)),
+    # Chapter 5 girder tables
+    "ch5_sec_prop": colspec(("C", 0.16), ("L", 0.52), ("p", 0.32)),
+    "ch5_sec_class": colspec(("C", 0.16), ("L", 0.20), ("C", 0.23), ("C", 0.16), ("p", 0.25)),
+    "ch5_moment_cap": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
+    "ch5_shear_cap": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
+    "ch5_interaction": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
+    "ch5_ltb": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
+    "ch5_stiffener_summary": colspec(("C", 0.16), ("L", 0.42), ("p", 0.42)),
+    "ch5_end_panel": colspec(("C", 0.16), ("L", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
+    "ch5_serv_defl": colspec(("C", 0.16), ("L", 0.23), ("C", 0.23), ("p", 0.23), ("C", 0.15)),
+    "ch5_serv_stress": colspec(("C", 0.16), ("L", 0.23), ("C", 0.23), ("p", 0.23), ("C", 0.15)),
+    "ch5_fatigue": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.23), ("C", 0.15)),
+    "ch5_girder_summary": colspec(("C", 0.11), ("p", 0.24), ("C", 0.16), ("C", 0.13), ("C", 0.14), ("C", 0.11), ("C", 0.11)),
+    # Chapter 5 shear connector tables
+    "ch5_sc_cap": colspec(("L", 0.24), ("C", 0.38), ("p", 0.18), ("L", 0.20)),
+    "ch5_sc_spacing": colspec(("L", 0.23), ("p", 0.31), ("p", 0.31), ("C", 0.15)),
+    "ch5_sc_transverse": colspec(("L", 0.37), ("p", 0.49), ("C", 0.14)),
+    # Chapter 5 deck slab tables
+    "ch5_deck_loading": colspec(("L", 0.35), ("p", 0.65)),
+    "ch5_deck_flexure": colspec(("C", 0.19), ("C", 0.23), ("C", 0.19), ("p", 0.27), ("C", 0.12)),
+    "ch5_deck_cantilever": colspec(("L", 0.35), ("C", 0.23), ("p", 0.29), ("C", 0.13)),
+    "ch5_deck_punching": colspec(("L", 0.35), ("C", 0.23), ("p", 0.29), ("C", 0.13)),
+    "ch5_deck_crack": colspec(("L", 0.45), ("p", 0.55)),
+    "ch5_deck_oneway": colspec(("L", 0.35), ("C", 0.23), ("p", 0.29), ("C", 0.13)),
+    "ch5_deck_rebar": colspec(("L", 0.35), ("p", 0.27), ("p", 0.26), ("C", 0.12)),
+    # Chapter 5 bracing and diaphragm tables
+    "ch5_cb_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
+    "ch5_cb_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
+    "ch5_cb_capacity": colspec(("C", 0.13), ("L", 0.12), ("C", 0.14), ("C", 0.19), ("C", 0.12), ("C", 0.12), ("C", 0.08), ("C", 0.10)),
+    "ch5_ed_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
+    "ch5_ed_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
+    "ch5_ed_capacity": colspec(("C", 0.13), ("L", 0.12), ("C", 0.14), ("C", 0.19), ("C", 0.12), ("C", 0.12), ("C", 0.08), ("C", 0.10)),
+    # Chapter 5 overall summary
+    "ch5_overall_summary": colspec(("C", 0.24), ("L", 0.32), ("C", 0.16), ("C", 0.16), ("p", 0.12)),
+    # Chapter 7
+    "ch7_boq": colspec(("C", 0.08), ("L", 0.26), ("C", 0.18), ("C", 0.12), ("C", 0.12), ("C", 0.12), ("C", 0.12)),
+    # Chapter 8
+    "ch8_history": colspec(("C", 0.10), ("C", 0.10), ("p", 0.80)),
+}
 
 
 def _packages():
@@ -111,7 +239,6 @@ def _table_setup():
 \setlength{\extrarowheight}{""" + TABLE["extrarowheight"] + r"""}
 
 % Prevent tables from overflowing past the page bottom:
-% if fewer than """ + n + r""" baseline-skips remain, break to the next page first.
 \BeforeBeginEnvironment{table}{\needspace{""" + n + r"""\baselineskip}}
 \BeforeBeginEnvironment{longtable}{\needspace{""" + n + r"""\baselineskip}}
 """
@@ -123,7 +250,6 @@ def _rule(gap):
 
 
 def _page_style(name, head_l, head_r):
-    # same header and footer for the main and plain styles
     hf = HEADER_FOOTER
     return r"""\fancypagestyle{""" + name + r"""}{
   \fancyhf{}
@@ -159,10 +285,7 @@ def _first_page_style():
 
 
 def preamble_block(meta):
-    """Return the LaTeX preamble up to \\begin{document}.
-
-    meta has the keys project, job, date and rev (plain text, escaped here).
-    """
+    """Return the LaTeX preamble up to \\begin{document}."""
     vals = {k: _tex(meta.get(k, '')) for k in ('project', 'job', 'date', 'rev')}
     head_l = HEADER_FOOTER["left"].format(**vals)
     head_r = HEADER_FOOTER["right"].format(**vals)
@@ -170,19 +293,50 @@ def preamble_block(meta):
         "\n\\documentclass[" + FONT["size"] + "," + PAGE["paper"] + "]{" + PAGE["doc_class"] + "}\n\n"
         + _packages()
         + _table_setup()
-        + "\n\\definecolor{osdagGreen}{HTML}{" + COLORS["brand"] + "}\n\n"
+        + "\n% Colors\n"
+        + "\\definecolor{osdagGreen}{HTML}{" + COLORS["brand"] + "}\n"
+        + "\\definecolor{osdagPass}{HTML}{" + COLORS["pass_"] + "}\n"
+        + "\\definecolor{osdagFail}{HTML}{" + COLORS["fail"] + "}\n"
+        + "\\definecolor{osdagWarn}{HTML}{" + COLORS["warn"] + "}\n"
+        + "\\definecolor{osdagInfo}{HTML}{" + COLORS["info"] + "}\n\n"
         + _page_style("main", head_l, head_r)
         + _page_style("plain", head_l, head_r)
         + _first_page_style()
         + r"""\pagestyle{main}
 \setstretch{""" + str(FONT["linespread"]) + r"""}
 
-% Custom Commands
+% Custom Commands and Column Types
 \newcommand{\placeholder}[1]{\textit{\textless #1\textgreater}}
 \newcommand{\todo}[1]{\colorbox{""" + COLORS["todo_bg"] + r"""}{TODO: #1}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% Row End and Spacing Macros
+\newcommand{\osRowEnd}{\\[""" + TABLE["row_gap"] + r"""]}
+\newcommand{\osRowEndLg}{\\[""" + TABLE["row_gap_lg"] + r"""]}
+\newcommand{\osRowEndSm}{\\[""" + TABLE["row_gap_sm"] + r"""]}
+\newcommand{\osTableSpace}{\vspace{""" + SPACING["table_space"] + r"""}}
+\newcommand{\osTableSpaceLg}{\vspace{""" + SPACING["table_space_lg"] + r"""}}
+\newcommand{\osTableSpaceSm}{\vspace{""" + SPACING["table_space_sm"] + r"""}}
+\newcommand{\osSectionSpace}{\vspace{""" + SPACING["section_gap"] + r"""}}
+\newcommand{\osSmallSpace}{\vspace{""" + SPACING["small_gap"] + r"""}}
+\newcommand{\osMiniSpace}{\vspace{""" + SPACING["mini_gap"] + r"""}}
+\newcommand{\osTitleTopSpace}{\vspace*{""" + SPACING["title_top"] + r"""}}
+\newcommand{\osFigPreSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
+\newcommand{\osFigMidSpace}{\vspace{""" + SPACING["fig_post"] + r"""}}
+\newcommand{\osFigPostSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
+
+% Status and Logging Macros
+\newcommand{\osPass}{\textcolor{osdagPass}{\textbf{PASS}}}
+\newcommand{\osFail}{\textcolor{osdagFail}{\textbf{FAIL}}}
+\newcommand{\osPassText}[1]{\textcolor{osdagPass}{#1}}
+\newcommand{\osFailText}[1]{\textcolor{osdagFail}{#1}}
+\newcommand{\osWarnText}[1]{\textcolor{osdagWarn}{#1}}
+\newcommand{\osLogInfo}[1]{\textcolor{osdagGreen}{#1}}
+\newcommand{\osLogWarn}[1]{\textcolor{osdagInfo}{#1}}
+\newcommand{\osLogError}[1]{\textcolor{osdagFail}{#1}}
+\newcommand{\osNote}[1]{\noindent\textit{#1}}
 
 % Software-default asterisk
 \newcommand{\sdstar}{\textsuperscript{*}}
