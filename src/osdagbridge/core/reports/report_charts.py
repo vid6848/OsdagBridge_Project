@@ -112,3 +112,104 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
     except Exception as exc:
         logger.warning("Failed to generate UR summary chart: %s", exc)
         return False
+
+
+def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) -> bool:
+    """
+    Generate material quantity bar charts for Chapter 7:
+    - Structural steel tonnage (Plate Girders, Cross Bracing, End Diaphragms) in MT
+    - Concrete volume (Deck Slab) in m³
+    - Reinforcement steel weight (Deck Slab Rebar) in MT
+    Uses Figure and FigureCanvasAgg directly without pyplot.
+    Returns True if the chart was successfully generated and written.
+    """
+    try:
+        numeric = inputs_or_quantities.get("numeric_quantities", {})
+        if not numeric:
+            def _parse_num(k):
+                v = inputs_or_quantities.get(k)
+                if v in (None, "N.A.", "", "---"):
+                    return 0.0
+                try:
+                    return float(v)
+                except (ValueError, TypeError):
+                    return 0.0
+
+            g_t = _parse_num("steel_girders_wt_total")
+            cb_t = (
+                _parse_num("bracing_top_wt_total")
+                + _parse_num("bracing_bot_wt_total")
+                + _parse_num("bracing_diag_wt_total")
+            )
+            ed_t = _parse_num("steel_ed_wt_total")
+            c_m3 = _parse_num("concrete_deck_vol_total")
+            r_t = _parse_num("rebar_deck_wt_total")
+        else:
+            g_t = float(numeric.get("girders_tonnes", 0.0) or 0.0)
+            cb_t = float(numeric.get("bracing_tonnes", 0.0) or 0.0)
+            ed_t = float(numeric.get("ed_tonnes", 0.0) or 0.0)
+            c_m3 = float(numeric.get("concrete_m3", 0.0) or 0.0)
+            r_t = float(numeric.get("rebar_tonnes", 0.0) or 0.0)
+
+        fig = Figure(figsize=(CHART.get("width_in", 6.3), 4.2), dpi=CHART.get("dpi", 200))
+        canvas = FigureCanvasAgg(fig)
+        gs = fig.add_gridspec(2, 2, height_ratios=[1.15, 1.0])
+
+        ax_steel = fig.add_subplot(gs[0, :])
+        ax_conc = fig.add_subplot(gs[1, 0])
+        ax_rebar = fig.add_subplot(gs[1, 1])
+
+        grid_col = CHART.get("grid", "#E3E3E3")
+
+        # 1. Structural Steel Tonnage
+        steel_labels = ["Plate Girders", "Cross Bracing", "End Diaphragms"]
+        steel_vals = [g_t, cb_t, ed_t]
+        steel_color = "#336699"
+        bars = ax_steel.bar(steel_labels, steel_vals, color=steel_color, width=0.45, zorder=2)
+        ax_steel.set_title("Structural Steel Tonnage by Component (MT)", fontsize=9.5, fontweight="bold")
+        ax_steel.set_ylabel("Weight (MT)", fontsize=8)
+        max_s = max(steel_vals) if steel_vals else 0.0
+        ax_steel.set_ylim(0, max_s * 1.25 if max_s > 0 else 10.0)
+        for b in bars:
+            h = b.get_height()
+            lbl = f"{h:.2f} MT" if h > 0 else "N.A."
+            ax_steel.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
+                              ha="center", va="bottom", fontsize=8, color="#222222")
+
+        # 2. Concrete Volume
+        bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color="#7A8B99", width=0.35, zorder=2)
+        ax_conc.set_title("Concrete Volume (m³)", fontsize=9.5, fontweight="bold")
+        ax_conc.set_ylabel("Volume (m³)", fontsize=8)
+        ax_conc.set_ylim(0, c_m3 * 1.25 if c_m3 > 0 else 10.0)
+        for b in bars_c:
+            h = b.get_height()
+            lbl = f"{h:.2f} m³" if h > 0 else "N.A."
+            ax_conc.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
+                             ha="center", va="bottom", fontsize=8, color="#222222")
+
+        # 3. Reinforcement Steel
+        bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color="#D97724", width=0.35, zorder=2)
+        ax_rebar.set_title("Reinforcement Steel (MT)", fontsize=9.5, fontweight="bold")
+        ax_rebar.set_ylabel("Weight (MT)", fontsize=8)
+        ax_rebar.set_ylim(0, r_t * 1.25 if r_t > 0 else 5.0)
+        for b in bars_r:
+            h = b.get_height()
+            lbl = f"{h:.2f} MT" if h > 0 else "N.A."
+            ax_rebar.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
+                              ha="center", va="bottom", fontsize=8, color="#222222")
+
+        for a in [ax_steel, ax_conc, ax_rebar]:
+            a.spines["top"].set_visible(False)
+            a.spines["right"].set_visible(False)
+            a.grid(axis="y", linestyle=":", color=grid_col, alpha=0.7)
+            a.set_axisbelow(True)
+            a.tick_params(axis="x", labelsize=8)
+            a.tick_params(axis="y", labelsize=7.5)
+
+        fig.tight_layout()
+        os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+        canvas.print_figure(output_png_path, dpi=CHART.get("dpi", 200))
+        return os.path.exists(output_png_path)
+    except Exception as exc:
+        logger.warning("Failed to generate quantity summary chart: %s", exc)
+        return False
