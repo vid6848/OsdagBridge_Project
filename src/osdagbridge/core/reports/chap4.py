@@ -6,6 +6,7 @@ from osdagbridge.core.utils.common import (
     KEY_SD_DEFL_TOTAL,
 )
 from osdagbridge.core.reports.report_utils import _tex, _fig_embed, longtable
+from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, VSPACE_SEC, status
 
 if TYPE_CHECKING:
     from .report_generator import ReportDataBridge
@@ -39,7 +40,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
             + _tex(bm_d.get('sf_girder', '---')) + r" & "
             + _fmt(bm_d.get('sf_location'))      + r" & "
             + _fmt(rxn_d.get('left_kN'))         + r" & "
-            + _fmt(rxn_d.get('right_kN'))        + r" \\[6pt]"
+            + _fmt(rxn_d.get('right_kN'))        + r" " + ROW_END
         )
 
     all_lcs = list(lc_summary.keys()) + [k for k in rxn_summary if k not in lc_summary]
@@ -47,7 +48,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     merged_body = ("\n\\hline\n").join(
         _merged_row(lc, lc_summary.get(lc), rxn_summary.get(lc))
         for lc in all_lcs
-    ) if all_lcs else r"--- & --- & --- & --- & --- & --- & --- & --- & --- \\[6pt]"
+    ) if all_lcs else r"--- & --- & --- & --- & --- & --- & --- & --- & --- " + ROW_END
 
     _span_m         = float(bridge.input_dict.get(KEY_SPAN, 0) or 0)
     _allow_live_mm  = _span_m * 1000.0 / 800.0
@@ -73,8 +74,8 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     _total_str       = f"{_total_mm:.3f} mm" if _total_mm is not None else "---"
     _allow_live_str  = f"L/800 = {_allow_live_mm:.1f} mm"
     _allow_total_str = f"L/600 = {_allow_total_mm:.1f} mm"
-    _live_status     = ("PASS" if _live_mm  <= _allow_live_mm  else r"\textcolor{red}{FAIL}") if _live_mm  is not None else "---"
-    _total_status    = ("PASS" if _total_mm <= _allow_total_mm else r"\textcolor{red}{FAIL}") if _total_mm is not None else "---"
+    _live_status     = (status(_live_mm <= _allow_live_mm) if _live_mm <= _allow_live_mm else status(False)) if _live_mm is not None else "---"
+    _total_status    = (status(_total_mm <= _allow_total_mm) if _total_mm <= _allow_total_mm else status(False)) if _total_mm is not None else "---"
 
     # The Summary of Maximum Demands table has a complex 2-row spanning header;
     # keep it hand-built so the multirow structure is preserved exactly.
@@ -95,28 +96,28 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     )
 
     # Reactions table body — empty placeholder rows kept from original
-    rxn_hdr  = r'\textbf{Load Case} & \textbf{Left Support (kN)} & \textbf{Right Support (kN)} \\[6pt]'
+    rxn_hdr  = r'\textbf{Load Case} & \textbf{Left Support (kN)} & \textbf{Right Support (kN)} ' + ROW_END
     rxn_body = (
-        r' & ' + '' + r' & ' + '' + r' \\[6pt]' + '\n\\hline\n'
-        + r' & ' + '' + r' & ' + '' + r' \\[6pt]' + '\n\\hline\n'
-        + r' & ' + '' + r' & ' + '' + r' \\[6pt]' + '\n\\hline\n'
+        r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
+        + r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
+        + r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
     )
 
     # Deflection table body
     defl_hdr  = r'\textbf{parameter} & \textbf{value} \\'
     defl_body = (
         r'\textnormal{Deflection due to Live Load, $\delta_{LL}$} & '
-        + _live_str + r' \\[6pt]' + '\n\\hline\n'
+        + _live_str + r' ' + ROW_END + '\n\\hline\n'
         + r'\textnormal{Allowable Live Load Deflection ($\Delta_{allow}$)} & '
-        + _allow_live_str + r' \\[6pt]' + '\n\\hline\n'
+        + _allow_live_str + r' ' + ROW_END + '\n\\hline\n'
         + r'\textnormal{Live Load Deflection Check Status} & '
-        + _live_status + r' \\[6pt]' + '\n\\hline\n'
+        + _live_status + r' ' + ROW_END + '\n\\hline\n'
         + r'\textnormal{Deflection due to Total Load, $\delta_{total}$} & '
-        + _total_str + r' \\[6pt]' + '\n\\hline\n'
+        + _total_str + r' ' + ROW_END + '\n\\hline\n'
         + r'\textnormal{Allowable Total Deflection ($\Delta_{allow}$)} & '
-        + _allow_total_str + r' \\[6pt]' + '\n\\hline\n'
+        + _allow_total_str + r' ' + ROW_END + '\n\\hline\n'
         + r'\textnormal{Total Load Deflection Check Status} & '
-        + _total_status + r' \\[6pt]' + '\n\\hline\n'
+        + _total_status + r' ' + ROW_END + '\n\\hline\n'
     )
 
     return (
@@ -125,40 +126,39 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         r' of elastic beam elements --- longitudinal members represent the composite steel'
         r' girders with effective slab, and transverse members represent the slab or cross'
         r' frames. This section summarizes the critical output from that analysis.'
-        + r"""
-
-\vspace{1em}
-\begingroup
+        + '\n\n'
+        + VSPACE_SEC + '\n'
+        r"""\begingroup
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.25}
 
 """
         + longtable(
-            r'|>{\centering\arraybackslash}p{3.1cm}|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{1.2cm}|>{\centering\arraybackslash}p{1.3cm}|>{\centering\arraybackslash}p{1.7cm}|>{\centering\arraybackslash}p{1.2cm}|>{\centering\arraybackslash}p{1.3cm}|>{\centering\arraybackslash}p{1.6cm}|>{\centering\arraybackslash}p{1.6cm}|',
+            TABLE_SPECS['ch4_demands'],
             'Summary of Maximum Demands',
             'tab:ch4:demands',
             _demands_hdr,
             merged_body + '\n\n\\hline\n',
         )
         + r'\endgroup' + '\n\n'
-        + r'\vspace{1em}' + '\n'
+        + VSPACE_SEC + '\n'
         + longtable(
-            r'|>{\centering\arraybackslash}p{5.2cm}|>{\centering\arraybackslash}p{5.2cm}|>{\centering\arraybackslash}p{5.2cm}|',
+            TABLE_SPECS['ch4_reactions'],
             'Reactions at Supports',
             'tab:ch4:reactions',
             rxn_hdr,
             rxn_body,
         )
-        + '\n\\vspace{1em}\n'
+        + '\n' + VSPACE_SEC + '\n'
         + longtable(
-            '|L{7cm}|p{8.5cm}|',
+            TABLE_SPECS['ch4_deflection'],
             'Deflection Summary (Live Load \\& Total Load)',
             'tab:ch4:deflection',
             defl_hdr,
             defl_body,
         )
-        + '\n\\vspace{1em}\n'
+        + '\n' + VSPACE_SEC + '\n'
         + r'\noindent' + '\n'
         + _fig_embed(fig_paths.get('bm_envelope'),
                      'Bending Moment Envelope (Envelope ULS): Max/min BM along span. X-axis: distance from left support (m). Y-axis: Bending Moment (kN-m).',
