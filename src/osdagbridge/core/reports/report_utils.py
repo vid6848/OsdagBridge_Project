@@ -7,10 +7,68 @@ from osdagbridge.core.utils.common import (
 
 
 def _count_cols(col_spec):
-    """Count longtable columns from a LaTeX column spec string."""
+    """Count longtable columns from a LaTeX column spec string.
+
+    Handles modifiers like >{...}, @{...}, repeated specs *{N}{...}, and column types.
+    """
     import re
-    # count column type letters not preceded by backslash
-    return max(1, len(re.findall(r'(?<![\\a-zA-Z])[LCRlcrp](?=\{|\||$|\s)', col_spec)))
+    spec = col_spec.strip()
+
+    def find_closing_brace(s, pos):
+        depth = 0
+        for i in range(pos, len(s)):
+            if s[i] == "{":
+                depth += 1
+            elif s[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return i
+        return len(s)
+
+    # expand *{N}{spec}
+    while "*{" in spec:
+        idx = spec.find("*{")
+        end_n = find_closing_brace(spec, idx + 1)
+        try:
+            n_repeat = int(spec[idx + 2:end_n].strip())
+        except ValueError:
+            break
+        if end_n + 1 < len(spec) and spec[end_n + 1] == "{":
+            end_content = find_closing_brace(spec, end_n + 1)
+            content = spec[end_n + 2:end_content]
+            spec = spec[:idx] + (content * n_repeat) + spec[end_content + 1:]
+        else:
+            break
+
+    # strip modifiers: >, <, @, !
+    out = []
+    i = 0
+    n = len(spec)
+    while i < n:
+        if spec[i] in "><@!" and i + 1 < n and spec[i + 1] == "{":
+            end_brace = find_closing_brace(spec, i + 1)
+            i = end_brace + 1
+        else:
+            out.append(spec[i])
+            i += 1
+    spec = "".join(out)
+
+    # strip width arguments for column types L, C, R, p, m, b
+    out = []
+    i = 0
+    n = len(spec)
+    while i < n:
+        if spec[i] in "LCRpmb" and i + 1 < n and spec[i + 1] == "{":
+            out.append(spec[i])
+            end_brace = find_closing_brace(spec, i + 1)
+            i = end_brace + 1
+        else:
+            out.append(spec[i])
+            i += 1
+    spec = "".join(out)
+
+    cols = re.findall(r"[LCRpmbclrXs]", spec)
+    return max(1, len(cols))
 
 
 def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None):
