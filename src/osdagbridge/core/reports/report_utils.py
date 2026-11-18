@@ -6,6 +6,65 @@ from osdagbridge.core.utils.common import (
 )
 
 
+def _count_cols(col_spec):
+    """Count longtable columns from a LaTeX column spec string."""
+    import re
+    # count column type letters not preceded by backslash
+    return max(1, len(re.findall(r'(?<![\\a-zA-Z])[LCRlcrp](?=\{|\||$|\s)', col_spec)))
+
+
+def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None):
+    """Build a longtable with repeated headers on every page (R1).
+
+    Args:
+        col_spec  : LaTeX column specification string, e.g. '|L{5cm}|p{10cm}|'
+        caption   : plain-text caption (will be wrapped in \\textbf inside \\caption)
+        label     : LaTeX label string, e.g. 'tab:ch2:typical-section'
+        header_row: raw LaTeX for the header row(s) ending with \\\\ (no trailing \\hline)
+        body      : raw LaTeX rows for the table body
+        tabcolsep : optional override for \\tabcolsep inside this table only (string, e.g. '4pt')
+
+    Returns a string of LaTeX that contains \\endfirsthead and \\endhead so the
+    scanner exits 0.  The 'continued' header uses \\caption[]{} so the counter
+    does not increment and no extra List-of-Tables entry is added.
+    """
+    grp_open  = '\\begingroup\n\\setlength{\\tabcolsep}{' + tabcolsep + '}\n' if tabcolsep else ''
+    grp_close = '\\endgroup\n' if tabcolsep else ''
+
+    ncols = _count_cols(col_spec)
+
+    cont_hdr = (
+        '\\caption[]{\\textbf{' + caption + '} (continued)}\\\\\n'
+        '\\hline\n'
+        + header_row + '\n'
+        '\\hline\n'
+    )
+
+    # endfoot: right-aligned "continued" note spanning all columns
+    endfoot = (
+        '\\multicolumn{' + str(ncols) + '}{r}{'
+        '\\footnotesize\\textit{Continued on next page}}\\\\\n'
+    )
+
+    return (
+        grp_open
+        + '\\begin{longtable}{' + col_spec + '}\n'
+        + '\\caption{\\textbf{' + caption + '}}\\label{' + label + '}\\\\\n'
+        + '\\hline\n'
+        + header_row + '\n'
+        + '\\hline\n'
+        + '\\endfirsthead\n'
+        + cont_hdr
+        + '\\endhead\n'
+        + endfoot
+        + '\\endfoot\n'
+        + '\\endlastfoot\n'
+        + body
+        + '\\end{longtable}\n'
+        + grp_close
+    )
+
+
 def _tex(value):
     """Escape a Python value for safe LaTeX embedding."""
     s = str(value) if value is not None else ''
