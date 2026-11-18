@@ -75,7 +75,7 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None):
     """Build a longtable with repeated headers on every page (R1).
 
     Args:
-        col_spec  : LaTeX column specification string, e.g. '|L{5cm}|p{10cm}|'
+        col_spec  : LaTeX column specification string (e.g. from styles.TABLE_SPECS)
         caption   : plain-text caption (will be wrapped in \\textbf inside \\caption)
         label     : LaTeX label string, e.g. 'tab:ch2:typical-section'
         header_row: raw LaTeX for the header row(s) ending with \\\\ (no trailing \\hline)
@@ -217,12 +217,12 @@ def _fig_embed(path, caption, width=r'\textwidth', height=None):
         if height:
             opts += ',height=' + height + ',keepaspectratio'
         return (r'\begin{figure}[H]' + '\n'
-                r'\vspace{-0.5em}' + '\n'
+                r'\osFigPreSpace{}' + '\n'
                 r'\centering' + '\n'
                 r'\includegraphics[' + opts + ']{' + p + '}\n'
-                r'\vspace{0.5em}' + '\n'
+                r'\osFigMidSpace{}' + '\n'
                 r'\caption*{\small ' + caption + '}\n'
-                r'\vspace{-0.5em}' + '\n'
+                r'\osFigPostSpace{}' + '\n'
                 r'\end{figure}')
     # fbox placeholder — matches template exactly
     return (r'\noindent\fbox{\parbox{0.97\textwidth}{' + '\n'
