@@ -89,7 +89,27 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         "crash_barrier_vol_total": "N.A.",
         "crash_barrier_wt_single": "N.A.",
         "crash_barrier_wt_total": "N.A.",
+
+        "steel_ed_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "steel_ed_qty": "N.A.",
+        "steel_ed_vol_total": "N.A.",
+        "steel_ed_wt_single": "N.A.",
+        "steel_ed_wt_total": "N.A.",
     }
+    quantities["numeric_quantities"] = {
+        "girders_tonnes": 0.0,
+        "bracing_tonnes": 0.0,
+        "ed_tonnes": 0.0,
+        "structural_steel_total_tonnes": 0.0,
+        "concrete_m3": 0.0,
+        "rebar_tonnes": 0.0,
+    }
+    quantities["qty_steel_girders_t"] = 0.0
+    quantities["qty_steel_bracing_t"] = 0.0
+    quantities["qty_steel_ed_t"] = 0.0
+    quantities["qty_concrete_m3"] = 0.0
+    quantities["qty_rebar_t"] = 0.0
+    quantities["qty_structural_steel_total_t"] = 0.0
     try:
         span_val = inputs.get(KEY_SPAN)
         n_girders_val = inputs.get(KEY_TS_NO_OF_GIRDERS)
@@ -330,7 +350,52 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 quantities[f"{prefix}_wt_single"] = "N.A."
                 quantities[f"{prefix}_wt_total"] = "N.A."
 
-        # 6. Crash Barrier (Cu.m) and Weight (MT)
+        # 6. End Diaphragms (Cu.m) and Weight (MT)
+        ed_mass_pm = 0.0
+        for k, v in outputs.items():
+            if "ed.section_properties" in str(k) and str(k).endswith(".M"):
+                try:
+                    vf = float(v)
+                    if vf > 0:
+                        ed_mass_pm = vf
+                        break
+                except (TypeError, ValueError):
+                    pass
+
+        if ed_mass_pm <= 0.0:
+            for k, v in inputs.items():
+                if "end_diaphragm_details.section_properties.mass" in str(k):
+                    try:
+                        vf = float(v)
+                        if vf > 0:
+                            ed_mass_pm = vf
+                            break
+                    except (TypeError, ValueError):
+                        pass
+
+        if ed_mass_pm > 0.0 and spacing > 0.0:
+            ed_qty = 2 * (n_girders - 1)
+            ed_len = spacing
+            ed_vol_single = (ed_mass_pm * ed_len) / 7850.0
+            ed_vol_total = ed_qty * ed_vol_single
+            ed_wt_single = (ed_mass_pm * ed_len) / 1000.0
+            ed_wt_total = ed_qty * ed_wt_single
+
+            quantities["steel_ed_vol_formula"] = (
+                f"${ed_mass_pm:.2f}\\text{{ kg/m}} \\times {ed_len:.2f}\\text{{ m}} = {ed_vol_single:.5f}\\text{{ m}}^3$"
+            )
+            quantities["steel_ed_qty"] = str(ed_qty)
+            quantities["steel_ed_vol_total"] = f"{ed_vol_total:.2f}"
+            quantities["steel_ed_wt_single"] = f"{ed_wt_single:.4f}"
+            quantities["steel_ed_wt_total"] = f"{ed_wt_total:.2f}"
+        else:
+            quantities["steel_ed_vol_formula"] = "N.A."
+            quantities["steel_ed_qty"] = "N.A."
+            quantities["steel_ed_vol_total"] = "N.A."
+            quantities["steel_ed_wt_single"] = "N.A."
+            quantities["steel_ed_wt_total"] = "N.A."
+
+        # 7. Crash Barrier (Cu.m) and Weight (MT)
         KEY_CB_AREA = "typical_section.crash_barrier.area"
         cb_area = 0.0
         cb_area_val = inputs.get(KEY_CB_AREA)
@@ -362,5 +427,41 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
 
     except Exception as exc:
         logger.warning(f"Error calculating material quantities: {exc}")
+
+    # Build numeric dictionary for charts and analytics
+    def _parse_num(key):
+        val = quantities.get(key)
+        if val in (None, "N.A.", "", "---"):
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    girders_t = _parse_num("steel_girders_wt_total")
+    bracing_t = (
+        _parse_num("bracing_top_wt_total")
+        + _parse_num("bracing_bot_wt_total")
+        + _parse_num("bracing_diag_wt_total")
+    )
+    ed_t = _parse_num("steel_ed_wt_total")
+    concrete_m3 = _parse_num("concrete_deck_vol_total")
+    rebar_t = _parse_num("rebar_deck_wt_total")
+
+    numeric = {
+        "girders_tonnes": girders_t,
+        "bracing_tonnes": bracing_t,
+        "ed_tonnes": ed_t,
+        "structural_steel_total_tonnes": girders_t + bracing_t + ed_t,
+        "concrete_m3": concrete_m3,
+        "rebar_tonnes": rebar_t,
+    }
+    quantities["numeric_quantities"] = numeric
+    quantities["qty_steel_girders_t"] = girders_t
+    quantities["qty_steel_bracing_t"] = bracing_t
+    quantities["qty_steel_ed_t"] = ed_t
+    quantities["qty_concrete_m3"] = concrete_m3
+    quantities["qty_rebar_t"] = rebar_t
+    quantities["qty_structural_steel_total_t"] = girders_t + bracing_t + ed_t
 
     return quantities
