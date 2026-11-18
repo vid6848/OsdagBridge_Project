@@ -1,7 +1,7 @@
 from osdagbridge.core.reports.report_utils import longtable
 from osdagbridge.core.reports.styles import TABLE_SPECS
 
-def ch7_quantities(input_dict):
+def ch7_quantities(input_dict, fig_paths=None):
     def _v(key):
         return str(input_dict.get(key, "N.A."))
 
@@ -36,6 +36,12 @@ def ch7_quantities(input_dict):
         + _v("bracing_diag_vol_total") + r' & '
         + _v("bracing_diag_wt_single") + r' & '
         + _v("bracing_diag_wt_total") + r' \\' + '\n\\hline\n'
+        + r'2(d) & End Diaphragms & '
+        + _v("steel_ed_vol_formula") + r' & '
+        + _v("steel_ed_qty") + r' & '
+        + _v("steel_ed_vol_total") + r' & '
+        + _v("steel_ed_wt_single") + r' & '
+        + _v("steel_ed_wt_total") + r' \\' + '\n\\hline\n'
         + r'3 & Concrete (M40) for Deck Slab & '
         + _v("concrete_deck_vol_formula") + r' & '
         + _v("concrete_deck_qty") + r' & '
@@ -74,5 +80,21 @@ def ch7_quantities(input_dict):
             hdr,
             body,
             tabcolsep='3.5pt',
+        )
+        + (
+            (
+                "\n\\osSectionSpace{}\n"
+                r"\begin{figure}[H]" + "\n"
+                r"\centering" + "\n"
+                r"\osFigPreSpace{}" + "\n"
+                r"\includegraphics[width=0.95\textwidth]{" + fig_paths["quantity_summary"].replace("\\", "/") + "}\n"
+                r"\osFigMidSpace{}" + "\n"
+                r"\caption{Material Take-off and Quantity Summary}" + "\n"
+                r"\label{fig:material-quantities}" + "\n"
+                r"\osFigPostSpace{}" + "\n"
+                r"\end{figure}" + "\n"
+            )
+            if (fig_paths and fig_paths.get("quantity_summary"))
+            else ""
         )
     )
