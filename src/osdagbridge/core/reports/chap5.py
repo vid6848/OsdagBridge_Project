@@ -146,7 +146,7 @@ from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, ROW_END_LG, RO
 
 if TYPE_CHECKING:
     pass
-def ch5_design_checks(checks_data, bridge) -> str:
+def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     """Chapter 5 — Design Checks.
 
     Parameters
@@ -155,6 +155,8 @@ def ch5_design_checks(checks_data, bridge) -> str:
         Raw checks payload (currently unused; data is sourced from bridge).
     bridge : ReportDataBridge
         Provides input_dict, output_dict, and helper methods.
+    fig_paths : dict, optional
+        Paths to generated figure images.
     """
     girder_entries = get_girder_entries(bridge.input_dict)
     if not girder_entries:
@@ -1450,4 +1452,20 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
             t522_content + "\n",
         )
         + r"\noindent\textit{Note: UR = Demand / Capacity. All values $\leq 1.0$ indicate passing checks. The governing check for each component is highlighted in the individual design check sections above.}" + "\n\n"
+        + (
+            (
+                "\n\\osSectionSpace{}\n"
+                r"\begin{figure}[H]" + "\n"
+                r"\centering" + "\n"
+                r"\osFigPreSpace{}" + "\n"
+                r"\includegraphics[width=0.95\textwidth]{" + fig_paths["ur_summary"].replace("\\", "/") + "}\n"
+                r"\osFigMidSpace{}" + "\n"
+                r"\caption{Overall Utilization Ratio (UR) Summary by Component}" + "\n"
+                r"\label{fig:ur-summary}" + "\n"
+                r"\osFigPostSpace{}" + "\n"
+                r"\end{figure}" + "\n"
+            )
+            if (fig_paths and fig_paths.get("ur_summary"))
+            else ""
+        )
     )
