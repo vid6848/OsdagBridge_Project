@@ -71,7 +71,7 @@ def _count_cols(col_spec):
     return max(1, len(cols))
 
 
-def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None):
+def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_left=None):
     """Build a longtable with repeated headers on every page (R1).
 
     Args:
@@ -81,13 +81,19 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None):
         header_row: raw LaTeX for the header row(s) ending with \\\\ (no trailing \\hline)
         body      : raw LaTeX rows for the table body
         tabcolsep : optional override for \\tabcolsep inside this table only (string, e.g. '4pt')
+        lt_left   : optional override for \\LTleft inside this table only (string, e.g. '0pt')
 
     Returns a string of LaTeX that contains \\endfirsthead and \\endhead so the
     scanner exits 0.  The 'continued' header uses \\caption[]{} so the counter
     does not increment and no extra List-of-Tables entry is added.
     """
-    grp_open  = '\\begingroup\n\\setlength{\\tabcolsep}{' + tabcolsep + '}\n' if tabcolsep else ''
-    grp_close = '\\endgroup\n' if tabcolsep else ''
+    overrides = []
+    if tabcolsep:
+        overrides.append('\\setlength{\\tabcolsep}{' + tabcolsep + '}')
+    if lt_left:
+        overrides.append('\\setlength{\\LTleft}{' + lt_left + '}')
+    grp_open  = ('\\begingroup\n' + '\n'.join(overrides) + '\n') if overrides else ''
+    grp_close = '\\endgroup\n' if overrides else ''
 
     ncols = _count_cols(col_spec)
 
