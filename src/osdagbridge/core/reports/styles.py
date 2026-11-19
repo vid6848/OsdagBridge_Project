@@ -48,6 +48,10 @@ TABLE = dict(
     rule_width="0.5pt",
     extrarowheight="0.6pt",
     needspace_lines=8,
+    tabcolsep_dense="3pt",
+    tabcolsep_compact="3.5pt",
+    tabcolsep_narrow="4pt",
+    arraystretch_dense=1.25,
 )
 
 SPACING = dict(
@@ -85,6 +89,11 @@ CHART = dict(
     pass_color="#91B014",
     fail_color="#C62828",
     grid="#E3E3E3",
+    steel_color="#336699",
+    concrete_color="#7A8B99",
+    rebar_color="#D97724",
+    label_color="#333333",
+    muted_color="#777777",
 )
 
 # LaTeX macro shortcuts and Python spacing tokens
@@ -154,7 +163,7 @@ TABLE_SPECS = {
     "ch2_bracing": colspec(("L", 0.15), ("L", 0.15), ("L", 0.20), ("L", 0.18), ("C", 0.16), ("C", 0.16)),
     # Chapter 3
     "five_col_loads": colspec(("L", 0.28), ("C", 0.16), ("C", 0.14), ("C", 0.24), ("C", 0.18)),
-    "ch3_vehicle_loads": colspec(("L", 0.28), ("C", 0.16), ("C", 0.14), ("C", 0.24), ("C", 0.18)),
+    "ch3_vehicle_loads": colspec(("L", 0.20), ("C", 0.13), ("C", 0.12), ("C", 0.20), ("C", 0.15), ("C", 0.20)),
     # Chapter 4
     "ch4_demands": colspec(("C", 0.18), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.13), ("C", 0.13)),
     "ch4_reactions": colspec(("C", 0.33), ("C", 0.33), ("C", 0.34)),
@@ -267,7 +276,7 @@ def _table_setup():
 
 % Prevent tables from overflowing past the page bottom:
 \BeforeBeginEnvironment{table}{\needspace{""" + n + r"""\baselineskip}}
-\BeforeBeginEnvironment{longtable}{\needspace{""" + n + r"""\baselineskip}}
+\BeforeBeginEnvironment{longtable}{\Needspace*{""" + n + r"""\baselineskip}}
 """
 
 
@@ -373,6 +382,8 @@ def preamble_block(meta):
 \newcommand{\osLogWarn}[1]{\textcolor{osdagInfo}{#1}}
 \newcommand{\osLogError}[1]{\textcolor{osdagFail}{#1}}
 \newcommand{\osNote}[1]{\noindent\textit{#1}}
+\newcommand{\osDenseTable}{\footnotesize\setlength{\tabcolsep}{""" + TABLE["tabcolsep_dense"] + r"""}\renewcommand{\arraystretch}{""" + str(TABLE["arraystretch_dense"]) + r"""}}
+\newcommand{\osCompactTable}{\setlength{\tabcolsep}{""" + TABLE["tabcolsep_compact"] + r"""}}
 
 % Software-default asterisk
 \newcommand{\sdstar}{\textsuperscript{*}}
