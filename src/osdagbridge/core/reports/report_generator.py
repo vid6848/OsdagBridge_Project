@@ -671,11 +671,26 @@ class ReportDataBridge:
             if str(k).startswith(KEY_MP_ED_TYPE) and v:
                 ed_type = str(v)
                 break
-        if "brac" in ed_type.strip().lower() and summary["cross_bracing"]:
+        ed_items = []
+        if "brac" in ed_type.strip().lower():
+            from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+            ed_res = self.output_dict.get("end_diaphragm_design_results") or {}
+            for pair in sorted(ed_res):
+                urs = []
+                for member in (ed_res.get(pair) or {}).values():
+                    for raw in (member or {}).values() if isinstance(member, dict) else []:
+                        eff = _extract_osdag_summary(raw or {}).get("efficiency")
+                        try:
+                            urs.append(float(eff))
+                        except (TypeError, ValueError):
+                            pass
+                if urs:
+                    ed_items.append((str(pair), round(max(urs), 3)))
+        if ed_items:
             summary["end_diaphragm"] = {
                 "designed": True,
                 "message": "",
-                "items": list(summary["cross_bracing"]),
+                "items": ed_items,
             }
         else:
             summary["end_diaphragm"] = {
@@ -1047,15 +1062,11 @@ def generate_report(payload, request):
             # Copy assets and images to output_dir so saved .tex is fully compilable standalone
             out_assets = os.path.join(request.output_dir, 'assets')
             if os.path.exists(tmp_assets):
-                if os.path.exists(out_assets):
-                    shutil.rmtree(out_assets)
-                shutil.copytree(tmp_assets, out_assets)
+                shutil.copytree(tmp_assets, out_assets, dirs_exist_ok=True)
 
             out_images = os.path.join(request.output_dir, 'images')
             if os.path.exists(tmp_images):
-                if os.path.exists(out_images):
-                    shutil.rmtree(out_images)
-                shutil.copytree(tmp_images, out_images)
+                shutil.copytree(tmp_images, out_images, dirs_exist_ok=True)
 
         if os.path.exists(pdf_path):
             logger.info("Report generated: %s", pdf_path)
