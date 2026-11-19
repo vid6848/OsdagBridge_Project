@@ -72,7 +72,7 @@ from osdagbridge.core.utils.common import (
 
 from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex, longtable
 from osdagbridge.core.reports.styles import (
-    TABLE_SPECS, ROW_END, ROW_END_LG,
+    TABLE, TABLE_SPECS, ROW_END, ROW_END_LG,
     VSPACE_TABLE, VSPACE_TABLE_LG, VSPACE_TABLE_SM,
     VSPACE_SEC, VSPACE_SMALL
 )
@@ -427,7 +427,7 @@ def _bracing_tables(input_dict, n_girders):
             'tab:ch2:cb-details',
             cb_hdr,
             cb_rows,
-            tabcolsep='4pt',
+            tabcolsep=TABLE['tabcolsep_narrow'],
         )
         + r'\osTableSpaceSm{}' + '\n'
         + longtable(
@@ -436,7 +436,7 @@ def _bracing_tables(input_dict, n_girders):
             'tab:ch2:ed-details',
             ed_hdr,
             ed_rows,
-            tabcolsep='4pt',
+            tabcolsep=TABLE['tabcolsep_narrow'],
         )
     )
 

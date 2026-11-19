@@ -1,5 +1,5 @@
 from osdagbridge.core.reports.report_utils import longtable
-from osdagbridge.core.reports.styles import TABLE_SPECS
+from osdagbridge.core.reports.styles import TABLE, TABLE_SPECS
 
 def ch7_quantities(input_dict, fig_paths=None):
     def _v(key):
@@ -79,7 +79,7 @@ def ch7_quantities(input_dict, fig_paths=None):
             'tab:ch7:boq',
             hdr,
             body,
-            tabcolsep='3.5pt',
+            tabcolsep=TABLE['tabcolsep_compact'],
         )
         + (
             (

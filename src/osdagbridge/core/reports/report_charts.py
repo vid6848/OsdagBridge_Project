@@ -38,7 +38,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
             ax.set_title(title, fontsize=10, fontweight="bold")
             if not items:
                 ax.text(0.5, 0.5, "No design results", ha="center", va="center",
-                        transform=ax.transAxes, color="#777777", fontstyle="italic", fontsize=8.5)
+                        transform=ax.transAxes, color=CHART["muted_color"], fontstyle="italic", fontsize=8.5)
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.spines["top"].set_visible(False)
@@ -71,7 +71,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
                     fw = "bold"
                 else:
                     lbl = f"{u:.2f}"
-                    c = "#333333"
+                    c = CHART["label_color"]
                     fw = "normal"
                 ax.annotate(lbl, (bar.get_x() + bar.get_width() / 2, u),
                             ha="center", va="bottom", fontsize=7.5, color=c, fontweight=fw)
@@ -99,7 +99,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
         else:
             msg = ed_info.get("message") or "Not designed in this version"
             ax_ed.text(0.5, 0.5, f"{msg}\n(Rolled / Welded section)", ha="center", va="center",
-                       transform=ax_ed.transAxes, color="#777777", fontstyle="italic", fontsize=8.5)
+                       transform=ax_ed.transAxes, color=CHART["muted_color"], fontstyle="italic", fontsize=8.5)
             ax_ed.set_xticks([])
             ax_ed.set_yticks([])
             ax_ed.spines["top"].set_visible(False)
@@ -164,7 +164,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
         # 1. Structural Steel Tonnage
         steel_labels = ["Plate Girders", "Cross Bracing", "End Diaphragms"]
         steel_vals = [g_t, cb_t, ed_t]
-        steel_color = "#336699"
+        steel_color = CHART["steel_color"]
         bars = ax_steel.bar(steel_labels, steel_vals, color=steel_color, width=0.45, zorder=2)
         ax_steel.set_title("Structural Steel Tonnage by Component (MT)", fontsize=9.5, fontweight="bold")
         ax_steel.set_ylabel("Weight (MT)", fontsize=8)
@@ -174,10 +174,10 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             h = b.get_height()
             lbl = f"{h:.2f} MT" if h > 0 else "N.A."
             ax_steel.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
-                              ha="center", va="bottom", fontsize=8, color="#222222")
+                              ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
         # 2. Concrete Volume
-        bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color="#7A8B99", width=0.35, zorder=2)
+        bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color=CHART["concrete_color"], width=0.35, zorder=2)
         ax_conc.set_title("Concrete Volume (m³)", fontsize=9.5, fontweight="bold")
         ax_conc.set_ylabel("Volume (m³)", fontsize=8)
         ax_conc.set_ylim(0, c_m3 * 1.25 if c_m3 > 0 else 10.0)
@@ -185,10 +185,10 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             h = b.get_height()
             lbl = f"{h:.2f} m³" if h > 0 else "N.A."
             ax_conc.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
-                             ha="center", va="bottom", fontsize=8, color="#222222")
+                             ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
         # 3. Reinforcement Steel
-        bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color="#D97724", width=0.35, zorder=2)
+        bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color=CHART["rebar_color"], width=0.35, zorder=2)
         ax_rebar.set_title("Reinforcement Steel (MT)", fontsize=9.5, fontweight="bold")
         ax_rebar.set_ylabel("Weight (MT)", fontsize=8)
         ax_rebar.set_ylim(0, r_t * 1.25 if r_t > 0 else 5.0)
@@ -196,7 +196,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             h = b.get_height()
             lbl = f"{h:.2f} MT" if h > 0 else "N.A."
             ax_rebar.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
-                              ha="center", va="bottom", fontsize=8, color="#222222")
+                              ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
         for a in [ax_steel, ax_conc, ax_rebar]:
             a.spines["top"].set_visible(False)

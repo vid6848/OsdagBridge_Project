@@ -57,7 +57,7 @@ form the basis of all design calculations in this software.
 \osSectionSpace{}
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\osCompactTable{}
 \begin{table}[H]
 \caption{\textbf{IRC Codes}}
 \begin{tabular}{""" + TABLE_SPECS["ch8_history"] + r"""}
@@ -81,7 +81,7 @@ IRC SP 114 & 2018 & Seismic Design of Road Bridges \\
 \endgroup
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\osCompactTable{}
 \begin{table}[H]
 \caption{\textbf{IS Codes}}
 \begin{tabular}{""" + TABLE_SPECS["ch8_history"] + r"""}
@@ -120,7 +120,7 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 
 \begin{itemize}
     \item Full shear connection is assumed at ULS with headed stud connectors designed per IRC 22:2015 Cl.606.
-    \item Short-term composite section properties (modular ratio $n = E_s/E_c$) are used for ULS checks.
+    \item Short-term composite section properties (modular ratio $n = E_s/E_{cm}$) are used for ULS checks.
     \item Long-term composite section properties (with creep-adjusted modular ratio) are used for SLS deflection and crack-width checks.
     \item Pre-composite stage: the steel girder alone resists all construction loads prior to concrete gaining strength.
 \end{itemize}

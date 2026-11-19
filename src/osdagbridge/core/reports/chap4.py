@@ -129,9 +129,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         + '\n\n'
         + VSPACE_SEC + '\n'
         r"""\begingroup
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.25}
+\osDenseTable{}
 
 """
         + longtable(
