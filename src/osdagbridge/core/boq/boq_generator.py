@@ -189,8 +189,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             except Exception:
                 pass
 
-        # The stored area and mass are from initial sizing. After Design take the
-        # final plate sizes, so the take-off agrees with the section property table.
+        # the stored area is from initial sizing, use the final plates
         designed_areas = []
         if outputs.get("design_results"):
             names = ("depth", "web_thickness", "top_flange_width", "top_flange_thickness",
@@ -408,8 +407,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     except (TypeError, ValueError):
                         pass
 
-        # A bracing type end diaphragm has two diagonals and up to two chords,
-        # any other type is one beam. Both give kg and metres per diaphragm.
+        # a braced diaphragm is two diagonals and its chords
         ed_kg = ed_len = 0.0
         n_braced = 0
         brace_h = float(((outputs.get("crossbracing_forces_dict") or {}).get("geometry") or {})
@@ -447,8 +445,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             ed_wt_single = (ed_mass_pm * ed_len) / 1000.0
             ed_wt_total = ed_qty * ed_wt_single
 
-            # same "area x length = volume" form as the other rows
-            # (area from the mass per metre, steel 7850 kg/m^3)
+            # area from the mass per metre
             ed_area = ed_mass_pm / 7850.0
             quantities["steel_ed_vol_formula"] = (
                 f"${ed_area:.5f}\\text{{ m}}^2 \\times {ed_len:.2f}\\text{{ m}} = {ed_vol_single:.5f}\\text{{ m}}^3$"
@@ -472,9 +469,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         if cb_area_val is not None:
             try:
                 cb_area = float(cb_area_val)
-                # The default is in mm^2 but Additional Inputs saves m^2
-                # (e.g. 0.2724). No barrier is 1000 m^2 or 1000 mm^2, so
-                # convert only large values.
+                # the default is in mm^2, the saved input in m^2
                 if cb_area >= 1000.0:
                     cb_area = cb_area / 1e6
             except Exception:
@@ -502,7 +497,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
     except Exception as exc:
         logger.warning(f"Error calculating material quantities: {exc}")
 
-    # Build numeric dictionary for charts and analytics
+    # numbers for the Chapter 7 chart
     def _parse_num(key):
         val = quantities.get(key)
         if val in (None, "N.A.", "", "---"):
