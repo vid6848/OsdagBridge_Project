@@ -49,7 +49,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
             urs = [it[1] for it in items]
             colors = [fail_col if u > 1.0 else pass_col for u in urs]
 
-            bars = ax.bar(labels, urs, color=colors, width=0.55, zorder=2)
+            bars = ax.bar(labels, urs, color=colors, width=CHART["bar_width"], zorder=2)
             ax.axhline(1.0, color=thresh_col, linestyle=thresh_ls, linewidth=1.0, zorder=3)
 
             if ylabel:
@@ -165,7 +165,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
         steel_labels = ["Plate Girders", "Cross Bracing", "End Diaphragms"]
         steel_vals = [g_t, cb_t, ed_t]
         steel_color = CHART["steel_color"]
-        bars = ax_steel.bar(steel_labels, steel_vals, color=steel_color, width=0.45, zorder=2)
+        bars = ax_steel.bar(steel_labels, steel_vals, color=steel_color, width=CHART["bar_width_steel"], zorder=2)
         ax_steel.set_title("Structural Steel Tonnage by Component (MT)", fontsize=9.5, fontweight="bold")
         ax_steel.set_ylabel("Weight (MT)", fontsize=8)
         max_s = max(steel_vals) if steel_vals else 0.0
@@ -177,7 +177,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
                               ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
         # 2. Concrete Volume
-        bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color=CHART["concrete_color"], width=0.35, zorder=2)
+        bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color=CHART["concrete_color"], width=CHART["bar_width_single"], zorder=2)
         ax_conc.set_title("Concrete Volume (m³)", fontsize=9.5, fontweight="bold")
         ax_conc.set_ylabel("Volume (m³)", fontsize=8)
         ax_conc.set_ylim(0, c_m3 * 1.25 if c_m3 > 0 else 10.0)
@@ -188,7 +188,7 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
                              ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
         # 3. Reinforcement Steel
-        bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color=CHART["rebar_color"], width=0.35, zorder=2)
+        bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color=CHART["rebar_color"], width=CHART["bar_width_single"], zorder=2)
         ax_rebar.set_title("Reinforcement Steel (MT)", fontsize=9.5, fontweight="bold")
         ax_rebar.set_ylabel("Weight (MT)", fontsize=8)
         ax_rebar.set_ylim(0, r_t * 1.25 if r_t > 0 else 5.0)
