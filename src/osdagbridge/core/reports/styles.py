@@ -124,7 +124,6 @@ CHART = dict(
     muted_color="#777777",
 )
 
-# short names for the LaTeX macros
 ROW_END = r"\osRowEnd{}"
 ROW_END_LG = r"\osRowEndLg{}"
 ROW_END_SM = r"\osRowEndSm{}"
@@ -188,7 +187,6 @@ def colspec(*cols):
     return "|" + "|".join(parts) + "|"
 
 
-# column layouts of the report tables
 TABLE_SPECS = {
     "ch1_info": colspec(("L", 0.38), ("L", 0.62)),
     "two_col_desc": colspec(("L", 0.35), ("p", 0.65)),
