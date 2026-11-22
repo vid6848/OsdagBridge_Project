@@ -18,7 +18,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
     - Plate Girders (max DCR per girder)
     - Deck Slab (flexure, punching, shear, crack width)
     - Cross Bracing (max UR per girder pair)
-    - End Diaphragms (UR per pair or 'Not designed in this version' note)
+    - End Diaphragms (Moment and Shear as in the summary table, or a note)
 
     Returns True if the chart was successfully generated and written.
     """

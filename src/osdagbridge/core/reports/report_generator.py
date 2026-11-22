@@ -512,6 +512,41 @@ class ReportDataBridge:
         except Exception:
             return ""
 
+    def get_cb_worst(self, force_type: str):
+        """Worst cross bracing member for a force type: (ur, pair, member), or None."""
+        best = None
+        for pair in self.get_cb_pairs():
+            for member in ("diagonal", "chord"):
+                try:
+                    ur = float(self.get_cb_efficiency(pair, member, force_type))
+                except (TypeError, ValueError):
+                    continue
+                if best is None or ur > best[0]:
+                    best = (ur, pair, member)
+        return best
+
+    def get_ed_type(self) -> str:
+        """End diaphragm type from the inputs, '' if not set."""
+        from osdagbridge.core.utils.common import KEY_MP_ED_TYPE
+        for k, v in self.input_dict.items():
+            if str(k).startswith(KEY_MP_ED_TYPE) and v:
+                return str(v)
+        return ""
+
+    def ed_is_bracing(self) -> bool:
+        return "brac" in self.get_ed_type().strip().lower()
+
+    def get_ed_checks(self) -> list:
+        """End diaphragm rows of the overall summary table: [(check, force type, worst)].
+
+        A bracing type end diaphragm is reported from the worst bracing members,
+        compression as Moment and tension as Shear. Table and chart both use this.
+        """
+        if not self.ed_is_bracing():
+            return []
+        return [(check, ftype, self.get_cb_worst(ftype))
+                for check, ftype in (("Moment", "compression"), ("Shear", "tension"))]
+
     def utilization_summary(self) -> dict:
         """
         Collect numeric utilization ratios (UR / DCR) for all structural components.
@@ -544,7 +579,6 @@ class ReportDataBridge:
             KEY_DD_WK_LIMIT,
             KEY_DD_WK_OH,
             KEY_DD_WK_TOP,
-            KEY_MP_ED_TYPE,
         )
 
         summary = {
@@ -668,31 +702,10 @@ class ReportDataBridge:
 
         summary["cross_bracing"] = _pair_urs()
 
-        # 4. End Diaphragms: check if bracing vs rolled/welded
-        ed_type = ""
-        for k, v in self.input_dict.items():
-            if str(k).startswith(KEY_MP_ED_TYPE) and v:
-                ed_type = str(v)
-                break
-        ed_items = []
-        if "brac" in ed_type.strip().lower():
-            from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
-            ed_res = self.output_dict.get("end_diaphragm_design_results") or {}
-            for pair in sorted(ed_res):
-                urs = []
-                for member in (ed_res.get(pair) or {}).values():
-                    for raw in (member or {}).values() if isinstance(member, dict) else []:
-                        eff = _extract_osdag_summary(raw or {}).get("efficiency")
-                        try:
-                            urs.append(float(eff))
-                        except (TypeError, ValueError):
-                            pass
-                if urs:
-                    ed_items.append((str(pair), round(max(urs), 3)))
-            # No separate end diaphragm results: Table 5.28 then shows the
-            # cross-bracing members, so the chart shows the same values.
-            if not ed_items:
-                ed_items = list(summary["cross_bracing"])
+        # 4. End Diaphragms: the same Moment and Shear values as the summary table
+        ed_type = self.get_ed_type()
+        ed_items = [(check, worst[0])
+                    for check, _ftype, worst in self.get_ed_checks() if worst]
         if ed_items:
             summary["end_diaphragm"] = {
                 "designed": True,
@@ -910,6 +923,32 @@ _FIGURE_MAP = [
     ('defl_ll',               'defl_ll.png'),
 ]
 
+# small section sketches that come with a wide empty border
+_TRIM_FIGURES = ('cb_bracing', 'cb_top_chord', 'cb_bottom_chord',
+                 'ed_bracing', 'ed_top_chord', 'ed_bottom_chord')
+
+
+def _trim_blank(img_bytes):
+    """Cut the empty border off a sketch. Returns the input if that fails."""
+    try:
+        import io
+        from PIL import Image, ImageChops
+
+        src = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+        flat = Image.new('RGBA', src.size, 'white')
+        flat.alpha_composite(src)
+        flat = flat.convert('RGB')
+        box = ImageChops.difference(flat, Image.new('RGB', flat.size, 'white')).getbbox()
+        if not box:
+            return img_bytes
+        out = io.BytesIO()
+        flat.crop(box).save(out, 'PNG')
+        return out.getvalue()
+    except Exception as exc:
+        logger.warning("Could not trim section sketch: %s", exc)
+        return img_bytes
+
+
 def generate_report(payload, request):
     # type: (ReportPayload, ReportRequest) -> ReportResult
     """Compile the full OsdagBridge Design Report to PDF (+ .tex source)."""
@@ -947,6 +986,8 @@ def generate_report(payload, request):
             fig_paths = {}
             for attr, img_bytes in list(payload.figure_data.items()):
                 if img_bytes:
+                    if attr in _TRIM_FIGURES:
+                        img_bytes = _trim_blank(img_bytes)
                     p = os.path.join(tmp_images, attr + '.png')
                     with open(p, 'wb') as fh:
                         fh.write(img_bytes)
@@ -1005,7 +1046,7 @@ def generate_report(payload, request):
             # chapters are locked in the UI, so they are always present.
             secs = payload.options.sections
 
-            doc_parts.append(executive_summary(payload.inputs, payload.output_dict, fig_paths))
+            doc_parts.append(executive_summary(payload.inputs, payload.output_dict, fig_paths, bridge))
             doc_parts.append(ch1_project_info(payload.metadata))
             doc_parts.append(ch2_input_parameters(payload.metadata, payload.inputs, payload.output_dict))
 

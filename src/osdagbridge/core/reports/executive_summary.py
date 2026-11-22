@@ -6,6 +6,30 @@ from osdagbridge.core.reports.report_utils import _fig_or_placeholder, _render_v
 from osdagbridge.core.reports.styles import TABLE_SPECS, VSPACE_SEC, VSPACE_TABLE_LG, VSPACE_TABLE_SM, colspec
 from osdagbridge.core.utils.common import (
     KEY_CARRIAGEWAY_WIDTH,
+    KEY_DD_AS_BOT,
+    KEY_DD_AS_LONG,
+    KEY_DD_AS_MIN,
+    KEY_DD_AS_REQ_BOT,
+    KEY_DD_AS_REQ_TOP,
+    KEY_DD_AS_TOP,
+    KEY_DD_COVER_OK,
+    KEY_DD_HAS_OVERHANG,
+    KEY_DD_MU_BOT,
+    KEY_DD_MU_OH,
+    KEY_DD_MU_TOP,
+    KEY_DD_M_ULS_HOG,
+    KEY_DD_M_ULS_OH,
+    KEY_DD_M_ULS_SAG,
+    KEY_DD_PUNCH_OK,
+    KEY_DD_SHEAR_OK,
+    KEY_DD_SPACING_MAX,
+    KEY_DD_SPC_BOT,
+    KEY_DD_WK_BOT,
+    KEY_DD_WK_LIMIT,
+    KEY_DD_WK_OH,
+    KEY_DD_WK_TOP,
+    KEY_SD_DEFL_LIVE,
+    KEY_SD_DEFL_TOTAL,
     KEY_SD_SECTION_DESIGNATION,
     KEY_SPAN,
     KEY_STRUCTURE_TYPE,
@@ -55,7 +79,98 @@ def _max_member_efficiency(pair_designs):
     return best
 
 
-def executive_summary(input_dict, output_dict, fig_paths) -> str:
+def _girder_outcome(input_dict, output_dict, failing):
+    if failing:
+        return "fail"
+    if not (output_dict.get("design_results") or {}).get("per_girder"):
+        return "not available"
+    # the deflection table has its own pass/fail result
+    try:
+        span_mm = float(input_dict.get(KEY_SPAN)) * 1000.0
+        n = int(input_dict.get(KEY_TS_NO_OF_GIRDERS))
+    except (TypeError, ValueError):
+        return "not available"
+    for key, limit in ((KEY_SD_DEFL_LIVE, span_mm / 800.0), (KEY_SD_DEFL_TOTAL, span_mm / 600.0)):
+        worst = _max_float([output_dict.get(f"{key}.G{i}") for i in range(1, n + 1)])
+        if worst is not None and worst > limit:
+            return "fail"
+    return "pass"
+
+
+def _deck_outcome(output_dict):
+    values = output_dict.get("deck_report_values") or {}
+    if not values:
+        return "not available"
+
+    def num(key):
+        try:
+            return float(values.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    results = output_dict.get("deck_design_results") or {}
+    worst = _max_float([v for k, v in results.items() if str(k).startswith("ur_")])
+    if worst is not None and worst > 1.0:
+        return "fail"
+    if (output_dict.get("design_results") or {}).get("transverse_shear_ok") is False:
+        return "fail"
+    # same comparisons as the deck tables in Chapter 5
+    as_bot, as_min = num(KEY_DD_AS_BOT), num(KEY_DD_AS_MIN)
+    crack = [num(KEY_DD_WK_BOT), num(KEY_DD_WK_TOP)]
+    checks = [
+        values.get(KEY_DD_PUNCH_OK),
+        values.get(KEY_DD_SHEAR_OK),
+        values.get(KEY_DD_COVER_OK),
+        num(KEY_DD_MU_BOT) >= num(KEY_DD_M_ULS_SAG),
+        num(KEY_DD_MU_TOP) >= num(KEY_DD_M_ULS_HOG),
+        as_bot >= num(KEY_DD_AS_REQ_BOT),
+        as_bot >= as_min,
+        num(KEY_DD_AS_TOP) >= num(KEY_DD_AS_REQ_TOP),
+        num(KEY_DD_AS_LONG) >= max(0.20 * as_bot, as_min),
+        0 < num(KEY_DD_SPC_BOT) <= num(KEY_DD_SPACING_MAX),
+    ]
+    if values.get(KEY_DD_HAS_OVERHANG):
+        checks.append(num(KEY_DD_MU_OH) >= num(KEY_DD_M_ULS_OH))
+        crack.append(num(KEY_DD_WK_OH))
+    checks.append(max(crack) <= num(KEY_DD_WK_LIMIT))
+    return "pass" if all(checks) else "fail"
+
+
+def _bracing_outcome(bridge):
+    if bridge is None or not bridge.get_cb_pairs():
+        return "not available"
+    for ftype in ("compression", "tension"):
+        worst = bridge.get_cb_worst(ftype)
+        if worst and worst[0] > 1.0:
+            return "fail"
+    top_chord = bridge.output_dict.get("member_properties.cross_bracing_details.top_chord", True)
+    missing = False
+    for pair in bridge.get_cb_pairs():
+        for member in ("diagonal", "chord"):
+            force, ftype = bridge.get_cb_governing_force(pair, member)
+            if force and not bridge.get_cb_efficiency(pair, member, ftype):
+                missing = True
+            limit = 250 if (member == "diagonal" or top_chord) else 400
+            slenderness = _max_float([bridge.get_cb_slenderness(pair, member)])
+            if slenderness is not None and slenderness > limit:
+                return "fail"
+    return "not available" if missing else "pass"
+
+
+def _diaphragm_outcome(bridge, bracing):
+    if bridge is None or not bridge.get_ed_type():
+        return "not available"
+    if not bridge.ed_is_bracing():
+        return "not designed in this version"
+    own = _max_member_efficiency(bridge.output_dict.get("end_diaphragm_design_results"))
+    if own is not None and own > 1.0:
+        return "fail"
+    if own is None and bracing != "not available":
+        return bracing + " (taken from the cross bracing checks)"
+    return bracing
+
+
+def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     plan_fig = _fig_or_placeholder(fig_paths.get('girder_top'), 'Figure 1 -- Overall Bridge Plan')
     cs_fig = _fig_or_placeholder(fig_paths.get('cross_section'),
                                   'Figure 2 -- Typical Cross-Section (with girder, deck, barriers, footpath)')
@@ -128,6 +243,11 @@ def executive_summary(input_dict, output_dict, fig_paths) -> str:
     else:
         overall_utilization_ratio = ""
 
+    girder_result = _girder_outcome(input_dict, output_dict, failing)
+    deck_result = _deck_outcome(output_dict)
+    cb_result = _bracing_outcome(bridge)
+    ed_result = _diaphragm_outcome(bridge, cb_result)
+
     gov = _tex(gov_name) if gov_name not in (None, '', 'None') else ''
     ur = _tex(overall_utilization_ratio) if overall_utilization_ratio else ''
 
@@ -159,7 +279,8 @@ def executive_summary(input_dict, output_dict, fig_paths) -> str:
     ur_cells = ' & '.join([ur] * n_cols)
     urs = f"Utilization Ratio & {ur_cells} \\\\"
 
-    table1 = (r'\noindent\textbf{Table 1 -- Final Bridge Geometry (after optimization)}' + '\n\n'
+    table1 = ('\\Needspace*{16\\baselineskip}\n'
+              r'\noindent\textbf{Table 1 -- Final Bridge Geometry (after optimization)}' + '\n\n'
               + VSPACE_TABLE_SM + '\n'
               r'\noindent' + '\n'
               r'\begin{tabular}{' + col_spec + '}\n'
@@ -216,8 +337,6 @@ This section provides a concise summary of the bridge design, key inputs, govern
 
 """ + plan_fig + r"""
 
-\newpage
-
 """ + cs_fig + '\n\n' + geom_fig + '\n\n' + table1 + r"""
 
 """ + VSPACE_TABLE_SM + r"""
@@ -229,10 +348,10 @@ This section provides a concise summary of the bridge design, key inputs, govern
 \addcontentsline{toc}{section}{Key Design Outcomes Summary}
 \label{sec:key-outcomes}
 
-\noindent Girder design pass \\
-Cross bracing design pass \\
-End Diaphragm design pass \\
-Deck design pass
+\noindent Girder design """ + girder_result + r""" \\
+Cross bracing design """ + cb_result + r""" \\
+End Diaphragm design """ + ed_result + r""" \\
+Deck design """ + deck_result + r"""
 
 \section*{Design Assumptions and Limitations}
 \addcontentsline{toc}{section}{Design Assumptions and Limitations}
