@@ -1,3 +1,4 @@
+import math
 from typing import TYPE_CHECKING
 from osdagbridge.core.utils.common import (
     KEY_SPAN,
@@ -5,7 +6,7 @@ from osdagbridge.core.utils.common import (
     KEY_SD_DEFL_LIVE,
     KEY_SD_DEFL_TOTAL,
 )
-from osdagbridge.core.reports.report_utils import _tex, _fig_embed, longtable
+from osdagbridge.core.reports.report_utils import NOT_STORED, _tex, _fig_embed, longtable
 from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, VSPACE_SEC, status
 
 if TYPE_CHECKING:
@@ -24,9 +25,10 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
 
     def _fmt(val, nd=3):
         try:
-            return f"{float(val):.{nd}f}"
+            value = float(val)
         except (TypeError, ValueError):
             return r"---"
+        return f"{value:.{nd}f}" if math.isfinite(value) else NOT_STORED
 
     def _merged_row(lc, bm_d, rxn_d):
         bm_d  = bm_d  or {}
@@ -65,6 +67,8 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     for _gi in range(1, n + 1):
         _l = bridge.output_dict.get(f"{KEY_SD_DEFL_LIVE}.G{_gi}")
         _t = bridge.output_dict.get(f"{KEY_SD_DEFL_TOTAL}.G{_gi}")
+        if not _t:
+            continue                        # zero means the analysis failed
         if _l is not None:
             _live_mm  = max(_live_mm, float(_l))  if _live_mm  is not None else float(_l)
         if _t is not None:
@@ -80,10 +84,10 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     # The Summary of Maximum Demands table has a complex 2-row spanning header;
     # keep it hand-built so the multirow structure is preserved exactly.
     _demands_hdr = (
-        r'\multirow{2}{*}{\makecell{\textbf{Load}\\\textbf{Case/}\\\textbf{Comb.}}}'
+        r'\multirow{2}{*}{\makecell{\textbf{Load Case/}\\\textbf{Comb.}}}'
         + r' & \multicolumn{3}{c|}{\textbf{Bending Moment}}'
         + r' & \multicolumn{3}{c|}{\textbf{Shear Force}}'
-        + r' & \multicolumn{2}{c|}{\textbf{Reaction at Supports}}\\'
+        + r' & \multicolumn{2}{c|}{\textbf{Reaction (kN)}}\\'
         + '\n\\cline{2-9}\n\n'
         + r' & \makecell{\textbf{Max}\\\textbf{(kNm)}}'
         + r' & \textbf{Girder}'
@@ -95,12 +99,20 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         + r' & \makecell{\textbf{Right }}\\'
     )
 
-    # Reactions table body — empty placeholder rows kept from original
+    # Reactions table: dead, service and ULS envelope, from the analysis summary
+    def _rxn(lc, side):
+        try:
+            value = float((rxn_summary.get(lc) or {})[side])
+            # nan, or zero from a failed analysis
+            return f"{value:.3f}" if abs(value) > 0 else NOT_STORED
+        except (KeyError, TypeError, ValueError):
+            return NOT_STORED
+
     rxn_hdr  = r'\textbf{Load Case} & \textbf{Left Support (kN)} & \textbf{Right Support (kN)} ' + ROW_END
-    rxn_body = (
-        r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
-        + r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
-        + r' & ' + '' + r' & ' + '' + r' ' + ROW_END + '\n\\hline\n'
+    rxn_body = ''.join(
+        _tex(lc) + r' & ' + _rxn(lc, 'left_kN') + r' & ' + _rxn(lc, 'right_kN')
+        + r' ' + ROW_END + '\n\\hline\n'
+        for lc in ('1.0 DL', '1.0 DL + 1.0 LL', 'Envelope ULS')
     )
 
     # Deflection table body
@@ -148,6 +160,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
             rxn_hdr,
             rxn_body,
         )
+        + r'\osTableFoot{Sum over the main girders, edge beams not included. Signs as given by the analysis.}' + '\n'
         + '\n' + VSPACE_SEC + '\n'
         + longtable(
             TABLE_SPECS['ch4_deflection'],

@@ -32,7 +32,7 @@ def ch6_drawings(fig_paths):
             return (r'\begin{figure}[H]' + '\n'
                     r'\centering' + '\n'
                     + VSPACE_SMALL + '\n'
-                    + r'\includegraphics[width=0.85\textwidth,height=\osFigMaxH,keepaspectratio]{' + p + '}\n'
+                    + r'\includegraphics[width=\osFigWideW,height=\osFigMaxH,keepaspectratio]{' + p + '}\n'
                     r'\caption{' + title + '}\n'
                     + label_tex
                     + r'\end{figure}' + '\n'
