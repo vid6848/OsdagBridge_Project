@@ -45,7 +45,8 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
             + _fmt(rxn_d.get('right_kN'))        + r" " + ROW_END
         )
 
-    all_lcs = list(lc_summary.keys()) + [k for k in rxn_summary if k not in lc_summary]
+    # the analysis gives the cases in a different order each run
+    all_lcs = sorted(set(lc_summary) | set(rxn_summary), key=str)
 
     merged_body = ("\n\\hline\n").join(
         _merged_row(lc, lc_summary.get(lc), rxn_summary.get(lc))
@@ -81,8 +82,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
     _live_status     = (status(_live_mm <= _allow_live_mm) if _live_mm <= _allow_live_mm else status(False)) if _live_mm is not None else "---"
     _total_status    = (status(_total_mm <= _allow_total_mm) if _total_mm <= _allow_total_mm else status(False)) if _total_mm is not None else "---"
 
-    # The Summary of Maximum Demands table has a complex 2-row spanning header;
-    # keep it hand-built so the multirow structure is preserved exactly.
+    # built by hand because of the two header rows
     _demands_hdr = (
         r'\multirow{2}{*}{\makecell{\textbf{Load Case/}\\\textbf{Comb.}}}'
         + r' & \multicolumn{3}{c|}{\textbf{Bending Moment}}'
@@ -99,7 +99,7 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         + r' & \makecell{\textbf{Right }}\\'
     )
 
-    # Reactions table: dead, service and ULS envelope, from the analysis summary
+    # dead, service and ULS envelope
     def _rxn(lc, side):
         try:
             value = float((rxn_summary.get(lc) or {})[side])
@@ -115,7 +115,6 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         for lc in ('1.0 DL', '1.0 DL + 1.0 LL', 'Envelope ULS')
     )
 
-    # Deflection table body
     defl_hdr  = r'\textbf{parameter} & \textbf{value} \\'
     defl_body = (
         r'\textnormal{Deflection due to Live Load, $\delta_{LL}$} & '
