@@ -32,7 +32,7 @@ def ch6_drawings(fig_paths):
             return (r'\begin{figure}[H]' + '\n'
                     r'\centering' + '\n'
                     + VSPACE_SMALL + '\n'
-                    + r'\includegraphics[width=0.85\textwidth]{' + p + '}\n'
+                    + r'\includegraphics[width=0.85\textwidth,height=\osFigMaxH,keepaspectratio]{' + p + '}\n'
                     r'\caption{' + title + '}\n'
                     + label_tex
                     + r'\end{figure}' + '\n'
@@ -59,7 +59,7 @@ def ch6_drawings(fig_paths):
         label_tex = (r'\label{' + label + '}') if label else ''
         if path:
             p = path.replace('\\', '/')
-            body = r'\includegraphics[width=\linewidth]{' + p + '}'
+            body = r'\includegraphics[width=\linewidth,height=\osFigSectionH,keepaspectratio]{' + p + '}'
         else:
             body = r'\fbox{\parbox{0.95\linewidth}{\centering\textit{[ ' + title + r' ]}}}'
         return (r'\begin{minipage}[t]{0.31\textwidth}' + '\n'
