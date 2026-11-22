@@ -153,8 +153,7 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     # dict when deck design has not been run. Look up with deck_rpt.get(KEY_...).
     deck_rpt = bridge.output_dict.get("deck_report_values", {}) or {}
 
-    # The design stores one section. A girder with other plate sizes shows its
-    # own sizes and no derived properties, instead of the other section's.
+    # derived properties are stored for one section only
     _flat_keys = (KEY_SD_TOTAL_DEPTH, KEY_SD_WEB_THICKNESS,
                   KEY_SD_TOP_FLANGE_WIDTH, KEY_SD_TOP_FLANGE_THICKNESS,
                   KEY_SD_BOTTOM_FLANGE_WIDTH, KEY_SD_BOTTOM_FLANGE_THICKNESS)
@@ -215,7 +214,6 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
         )
     t52_content = "\n".join(t52_rows)
 
-    # Tables 5.3 to 5.6 read each girder's own checks, see get_girder_results().
     def _val(check, field, unit=""):
         value = check.get(field)
         return f"{float(value):.2f}{unit}" if value is not None else ""
@@ -238,7 +236,7 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
         return status_badge(False)
 
     def _step(check, capacity_key, key, unit=""):
-        # the steps are stored for one section only, show them where they give this capacity
+        # steps are stored for one section only
         try:
             same = abs(float(check["capacity"]) - float(bridge.output_dict[capacity_key])) < 0.05
         except (KeyError, TypeError, ValueError):
@@ -306,7 +304,7 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
             # no axial load, so the design has no M-N check
             mn_cond = mn_val = mn_result = "N/A"
         t55_rows.append(
-            r"\multirow[t]{4}{*}{\makecell{" + lbl + r"""}} & High Shear Condition? & $V_u > 0.6\,V_d$ & """ + high + r""" & --- \osRowKeep{}
+            r"\multirow[t]{4}{*}{\makecell{" + lbl + r"""}} & High Shear Condition? & $V_u > 0.6\,V_d$ (plastic) & """ + high + r""" & --- \osRowKeep{}
 \cline{2-5}
  & Reduced Moment Capacity, $M_{dv}$ & IRC 22 Cl. 603.3.3.3 & """ + _val(mv, "capacity", " kN-m") + r""" & --- \osRowKeep{}
 \cline{2-5}
@@ -337,8 +335,7 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     t56_content = "\n".join(t56_rows)
 
     # Generate Table 5.7 rows
-    # In Optimized mode the stored stiffener sizes are the required ones, the
-    # provided ones are in the Chapter 2 stiffener table.
+    # in Optimized mode these are the required sizes
     _req = ("" if str(bridge.input_dict.get(KEY_DESIGN_MODE, "Optimized")).strip().lower()
             in {"custom", "customized"} else ", required")
     t57_rows = []
@@ -697,7 +694,6 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
     )
 
     def _member_tables(src):
-        """Rows of the section, slenderness and capacity tables of braced members."""
         # Generate Table 5.20(a) rows
         cb_forces_rows = []
         pairs = src.get_cb_pairs()
@@ -727,8 +723,7 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
 
                     area_cm2 = src.output_dict.get(f"{pfx}.A")
                     rv_cm = src.output_dict.get(f"{pfx}.rv")
-                    # The design stores A and r of one section per member. Show them
-                    # only if that is the section shown in this row.
+                    # A and r are stored for one section per member
                     part = ("bracing_section_type" if member == "diagonal"
                             else "bottom_chord_section_designation")
                     stored = src.output_dict.get(
@@ -989,7 +984,7 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
                     sf = float(s)
                 except (TypeError, ValueError):
                     continue
-                # a chord row covers both chords, the compression chord has the lower limit
+                # the compression chord has the lower limit
                 lim = 400.0 if member == "chord" and not _top_chord_522 else 250.0
                 ratio = sf / lim
                 if best is None or ratio > best[0]:
@@ -1040,8 +1035,7 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
 
     # Crack width (slab): governing crack width vs limit from the deck designer
     # (frequent SLS combination). _dk_gov_wk is the max of bottom/top/overhang wk.
-    # The deck results do not store which frequent combination governed, and a
-    # girder's fatigue combination is not the deck's, so only the type is named.
+    # the deck does not store its governing combination
     _wk_lim = _dkv(KEY_DD_WK_LIMIT)
     _crack_cells = (
         ("Frequent SLS" if _dk_has else "---"),
@@ -1402,7 +1396,7 @@ Cross bracing between adjacent plate girders provides lateral stability during c
             cb_capacity_content + "\n",
             tabcolsep=TABLE["tabcolsep_dense"],
         )
-        + r"\noindent\textit{Note: Designed per IS 800 Cl. 7 (compression) and Cl. 6 (tension). OsdagBridge cross-bracing module used. UR is the value returned by the Osdag member designer; for compression members it can differ from Demand / Capacity.}" + "\n"
+        + r"\osTableFoot{Note: Designed per IS 800 Cl. 7 (compression) and Cl. 6 (tension). OsdagBridge cross-bracing module used. UR is the value returned by the Osdag member designer; for compression members it can differ from Demand / Capacity.}" + "\n"
         + r"""
 \section{End Diaphragm Design}
 \label{sec:end-diaphragm}
@@ -1440,7 +1434,7 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
             ed_capacity_content + "\n",
             tabcolsep=TABLE["tabcolsep_dense"],
         )
-        + r"\noindent\textit{Note: Designed per IS 800 Cl. 7 (compression) and Cl. 6 (tension). OsdagBridge cross-bracing module used. UR is the value returned by the Osdag member designer; for compression members it can differ from Demand / Capacity.}" + "\n"
+        + r"\osTableFoot{Note: Designed per IS 800 Cl. 7 (compression) and Cl. 6 (tension). OsdagBridge cross-bracing module used. UR is the value returned by the Osdag member designer; for compression members it can differ from Demand / Capacity.}" + "\n"
         + r"""
 \section{Overall Design Check Summary}
 \label{sec:overall-summary}
