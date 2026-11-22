@@ -62,7 +62,6 @@ from osdagbridge.core.reports.styles import TABLE, TABLE_SPECS, ROW_END, VSPACE_
 
 
 def _is_on(val):
-    """Return True for True / 1 / 'True' / '1' / 'yes', False otherwise."""
     if isinstance(val, bool):
         return val
     if isinstance(val, int):
@@ -72,9 +71,7 @@ def _is_on(val):
 def ch3_loads(input_dict):
     from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
 
-    # -------------------------------------------------------------------------
-    # Vehicle live load rows — only ticked vehicles appear
-    # -------------------------------------------------------------------------
+    # only vehicles ticked in the inputs
     # Vehicles where IRC 6 gives no braking definition (tracked/bogie types)
     _NO_BRAKING = {'Class AA (Tracked)', 'Class 70R (Bogie)'}
 
@@ -99,7 +96,6 @@ def ch3_loads(input_dict):
         except Exception:
             return _NA
 
-    # (key, display_name, impact_clause, no_braking, braking_key, total_load_kN)
     _VEHICLE_DEFS = [
         (KEY_LL_IRC_CLASS_A,       'Class A',              'Class A',  False, KEY_BL_IRC_CLASS_A,       _total_kN(IRC6_2017.cl_204_1_ClassA_vehicle)),
         (KEY_LL_IRC_70R_WHEELED,   'Class 70R (Wheeled)',  'AA/70R',   False, KEY_BL_IRC_70R_WHEELED,   _total_kN(IRC6_2017.cl_204_1_Class70R_vehicle_wheel)),
@@ -122,7 +118,6 @@ def ch3_loads(input_dict):
     # lane counter is usually empty, so fall back to the carriageway width
     lanes_int, _ = design_lanes(input_dict)
 
-    # Pre-compute braking force once (same value for all ticked vehicles)
     braking_kN_str = '---'
     if lanes_int is not None:
         try:
@@ -131,7 +126,6 @@ def ch3_loads(input_dict):
         except Exception:
             braking_kN_str = 'N/A'
 
-    # Eccentricity from input
     ecc_val = (
         input_dict.get(KEY_LL_ECCENTRICITY)
         or input_dict.get(KEY_BL_ECCENTRICITY)
@@ -145,28 +139,33 @@ def ch3_loads(input_dict):
     else:
         ecc_str = '---'
 
-    # Build one row per ticked vehicle
     veh_rows = []
     braking_shown = sv_shown = False
     for key, name, im_cls, no_braking, bl_key, total_kN in _VEHICLE_DEFS:
         if not _is_on(input_dict.get(key)):
             continue
 
-        # Impact factor
         if span_m is not None:
             try:
-                if im_cls == 'Class A':
+                if key == KEY_LL_IRC_CLASS_SV:
+                    im = 0.0  # Cl. 204.5.4
+                elif im_cls == 'Class A':
                     im = IRC6_2017.cl_208_2_impact_factor(span_m)
                 else:
                     im = IRC6_2017.cl_208_3_impact_factor(span_m)
+                if key == KEY_LL_IRC_CLASS_FATIGUE:
+                    im *= 0.5  # Cl. 204.6
                 im_str = f'{1.0 + im:.3f}'
             except Exception:
                 im_str = 'N/A'
         else:
             im_str = 'N/A'
 
-        # Braking
-        if no_braking:
+        if key == KEY_LL_IRC_CLASS_SV:
+            sv_shown = True
+            br_considered = 'No'
+            br_value = '---'
+        elif no_braking:
             br_considered = r'---\textsuperscript{\dag}'
             br_value      = r'---\textsuperscript{\dag}'
         elif _is_on(input_dict.get(bl_key, True)):
@@ -174,7 +173,6 @@ def ch3_loads(input_dict):
             br_value      = braking_kN_str
             if lanes_int is not None:
                 braking_shown = True
-                sv_shown = sv_shown or key == KEY_LL_IRC_CLASS_SV
         else:
             br_considered = 'No'
             br_value      = '---'
@@ -185,7 +183,6 @@ def ch3_loads(input_dict):
             + r' \osRowEnd{}' + '\n\\hline'
         )
 
-    # Custom vehicles if specified
     custom = input_dict.get(KEY_LL_CUSTOM_VEHICLES)
     if custom and isinstance(custom, list):
         for c in custom:
@@ -207,11 +204,9 @@ def ch3_loads(input_dict):
     _brk_mark = r'\textsuperscript{\ddag}' if braking_shown else ''
     _brk_note = ''
     if braking_shown:
-        _brk_note = (
-            r'\osTableFoot{\textsuperscript{\ddag} One lane-based value for all vehicles (Cl.~211.2)'
-            + (r'; Class SV needs no braking (Cl.~204.5.4).' if sv_shown else '.')
-            + '}'
-        )
+        _brk_note = r'\osTableFoot{\textsuperscript{\ddag} One lane-based value, the same for each vehicle with braking (Cl.~211.2).}'
+    if sv_shown:
+        _brk_note += r'\osTableFoot{Class SV needs no impact and no braking (Cl.~204.5.4).}'
     veh_hdr  = (
         r'\multirow{2}{*}{\textbf{Vehicle}} & \multirow{2}{*}{\makecell{\textbf{Total Load}\\\textbf{(kN)}}}'
         r' & \multirow{2}{*}{\makecell{\textbf{Impact}\\\textbf{Factor}}} & \multicolumn{3}{c|}{\textbf{Braking Load}} \\'
@@ -222,9 +217,6 @@ def ch3_loads(input_dict):
         r'\osTableFoot{\textsuperscript{\dag} Not defined for this vehicle type in the IRC~6 module of this version.}'
     )
 
-    # -------------------------------------------------------------------------
-    # Footpath / kerb live load
-    # -------------------------------------------------------------------------
     fp_cfg   = str(input_dict.get(KEY_FOOTPATH, 'None')).strip()
     if fp_cfg in ('None', '', 'False', '0'):
         fp_present = 'No'
@@ -266,17 +258,12 @@ def ch3_loads(input_dict):
     )
     _hdr2 = r'\textbf{Parameter} & \textbf{Value} \\'
 
-    # -------------------------------------------------------------------------
-    # Centrifugal force note
-    # -------------------------------------------------------------------------
     _centrifugal_note = (
         r'\osNote{Centrifugal Force: Not applicable'
         r' --- the design inputs have no horizontal curvature (IRC~6 Cl.~212).}'
     )
 
-    # -------------------------------------------------------------------------
     # Vz / Pz — prefer stored computed values; fall back to IRC6 Table 12
-    # -------------------------------------------------------------------------
     vz_val = input_dict.get(KEY_WL_HOURLY_MEAN_WIND)
     pz_val = input_dict.get(KEY_WL_HOURLY_WIND_PRESSURE)
     if not vz_val or not pz_val:
@@ -400,10 +387,8 @@ def ch3_loads(input_dict):
 
     lc_rows_str = "\n".join(lc_rows)
 
-    # shared 2-col header for parameter/value tables
     _hdr2 = r'\textbf{Parameter} & \textbf{Value} \\'
 
-    # Dead Load body
     dl_body = (
         r'\textnormal{Steel Self-Weight Applied} & '
         + _render_value(input_dict, KEY_MATERIAL_GIRDER_DENSITY, r' kN/m\textsuperscript{3}')
@@ -416,12 +401,11 @@ def ch3_loads(input_dict):
         + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # Surfacing body
     surf_body = (
         r'\textnormal{Wearing Course Load} & '
         + _render_value(input_dict, KEY_WC_MATERIAL)
         + r' x '
-        + _render_value(input_dict, KEY_WC_THICKNESS)
+        + _render_value(input_dict, KEY_WC_THICKNESS, ' mm')
         + r' \osRowEnd{}' + '\n\\hline\n'
         + r'\textnormal{Additional SIDL (Crash Barrier)} & '
         + _render_value(input_dict, KEY_CB_LOAD)
@@ -431,7 +415,6 @@ def ch3_loads(input_dict):
         + r' kN/m\sdstar{} \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # Wind Load body
     wl_body = (
         r'\textnormal{Basic Wind Speed, Vb} & '
         + _render_value(input_dict, 'wind_speed', ' m/s')
@@ -459,7 +442,6 @@ def ch3_loads(input_dict):
         + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # Earthquake body
     el_body = (
         r'\textnormal{Seismic Zone} & '
         + _render_value(input_dict, 'seismic_zone')
@@ -488,7 +470,6 @@ def ch3_loads(input_dict):
         + NOT_STORED + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # Temperature body
     tl_body = (
         r'\textnormal{Maximum Shade Temperature} & '
         + _render_value(input_dict, 'shade_temp_max')
@@ -506,7 +487,6 @@ def ch3_loads(input_dict):
         + r' $^\circ$C \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # Load Combinations body
     lc_hdr  = r'\textbf{Combination ID} & \textbf{Load Cases} \osRowEnd{}'
     lc_body = lc_rows_str + '\n'
 
