@@ -2,8 +2,11 @@
 # EXECUTIVE SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════════
 
-from osdagbridge.core.reports.report_utils import _fig_or_placeholder, _render_value, _tex, get_girder_entries
-from osdagbridge.core.reports.styles import TABLE_SPECS, VSPACE_SEC, VSPACE_TABLE_LG, VSPACE_TABLE_SM, colspec
+from osdagbridge.core.reports.report_utils import (
+    NOT_STORED, _fig_or_placeholder, _render_value, _tex,
+    get_girder_entries, girder_dims_mm, not_stored_note)
+from osdagbridge.core.reports.styles import (
+    TABLE_SPECS, TITLE, VSPACE_SEC, VSPACE_TABLE_LG, VSPACE_TABLE_SM, chapter_format, colspec)
 from osdagbridge.core.utils.common import (
     KEY_CARRIAGEWAY_WIDTH,
     KEY_DD_AS_BOT,
@@ -79,10 +82,10 @@ def _max_member_efficiency(pair_designs):
     return best
 
 
-def _girder_outcome(input_dict, output_dict, failing):
+def _girder_outcome(input_dict, output_dict, failing, has_results):
     if failing:
         return "fail"
-    if not (output_dict.get("design_results") or {}).get("per_girder"):
+    if not has_results:
         return "not available"
     # the deflection table has its own pass/fail result
     try:
@@ -144,12 +147,15 @@ def _bracing_outcome(bridge):
         if worst and worst[0] > 1.0:
             return "fail"
     top_chord = bridge.output_dict.get("member_properties.cross_bracing_details.top_chord", True)
+    if not any(bridge.get_cb_worst(t) for t in ("compression", "tension")):
+        return "not available"
     missing = False
     for pair in bridge.get_cb_pairs():
         for member in ("diagonal", "chord"):
-            force, ftype = bridge.get_cb_governing_force(pair, member)
-            if force and not bridge.get_cb_efficiency(pair, member, ftype):
-                missing = True
+            for ftype in ("compression", "tension"):
+                if (bridge.get_cb_force(pair, member, ftype)
+                        and not bridge.get_cb_efficiency(pair, member, ftype)):
+                    missing = True
             limit = 250 if (member == "diagonal" or top_chord) else 400
             slenderness = _max_float([bridge.get_cb_slenderness(pair, member)])
             if slenderness is not None and slenderness > limit:
@@ -162,10 +168,10 @@ def _diaphragm_outcome(bridge, bracing):
         return "not available"
     if not bridge.ed_is_bracing():
         return "not designed in this version"
-    own = _max_member_efficiency(bridge.output_dict.get("end_diaphragm_design_results"))
-    if own is not None and own > 1.0:
-        return "fail"
-    if own is None and bracing != "not available":
+    source = bridge.get_ed_source()
+    if source is not bridge:
+        return _bracing_outcome(source)
+    if bracing != "not available":
         return bracing + " (taken from the cross bracing checks)"
     return bracing
 
@@ -177,7 +183,7 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     geom_fig = _fig_or_placeholder(fig_paths.get('final_geometry'),
                                     'Figure 3 -- 3D View of Bridge Superstructure')
 
-    # All girders share the same section, governing check, and UR.
+    # Each girder gets its own section, governing check and UR.
     # The section designation is produced by the designer pipeline, so it lives
     # in output_dict (not input_dict).
     sec = _render_value(output_dict, KEY_SD_SECTION_DESIGNATION)
@@ -185,7 +191,8 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     # ── Pull the stored result dicts once, then work off these locals ─────────
     # (no value is recomputed here — the pipeline already filled these in).
     design_results = output_dict.get("design_results", {}) or {}
-    per_girder     = design_results.get("per_girder", {}) or {}
+    all_lines      = design_results.get("per_girder", {}) or {}
+    per_girder     = bridge.get_girder_results() if bridge else []
     deck_results   = output_dict.get("deck_design_results", {}) or {}
     cb_results     = output_dict.get("crossbracing_design_results", {}) or {}
     ed_results     = output_dict.get("end_diaphragm_design_results", {}) or {}
@@ -196,9 +203,7 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     failing = []                        # failing check names (order-preserving, deduped)
     gov_name, gov_dcr = "", None
     girder_max_ur = None
-    for g, gd in per_girder.items():
-        if str(g).startswith("EB"):     # skip edge-beam pseudo girders
-            continue
+    for gd in per_girder:                # the bridge's own girders only
         for chk in (gd.get("checks") or []):
             try:
                 _val = chk.get("dcr")
@@ -218,7 +223,9 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
                 if girder_max_ur is None or dcr > girder_max_ur:
                     girder_max_ur = dcr
 
-    if not per_girder:
+    if all_lines and not per_girder:
+        overall_design_status = "Not available (no valid per-girder results from the analysis)"
+    elif not per_girder:
         overall_design_status = ""
     elif failing:
         overall_design_status = "Fail (" + ", ".join(failing) + ")"
@@ -237,19 +244,20 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
         m = _max_member_efficiency(results)
         if m is not None:
             component_urs.append((m, label))
-    if component_urs:
+    if component_urs and not (all_lines and not per_girder):
         max_ur, max_label = max(component_urs, key=lambda t: t[0])
         overall_utilization_ratio = f"{max_ur:.2f} ({max_label})"
     else:
         overall_utilization_ratio = ""
 
-    girder_result = _girder_outcome(input_dict, output_dict, failing)
+    girder_result = _girder_outcome(input_dict, output_dict, failing, bool(per_girder))
     deck_result = _deck_outcome(output_dict)
     cb_result = _bracing_outcome(bridge)
     ed_result = _diaphragm_outcome(bridge, cb_result)
 
-    gov = _tex(gov_name) if gov_name not in (None, '', 'None') else ''
-    ur = _tex(overall_utilization_ratio) if overall_utilization_ratio else ''
+    status_text = _tex(overall_design_status) or NOT_STORED
+    gov = _tex(gov_name) if gov_name not in (None, '', 'None') else NOT_STORED
+    ur = _tex(overall_utilization_ratio) if overall_utilization_ratio else NOT_STORED
 
     # --- Dynamic Table 1: fetch backend-populated labels via exact suffix pattern ---
     # defaults.py populates: KEY_MP_GD_SELECT_GIRDER + '.G{i}' = 'G{i}'
@@ -272,17 +280,29 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     member_id_row = 'Member ID & ' + mid_cells + r' \\' + '\n'
 
     # Section / Governing Check / UR rows
-    sec_cells = ' & '.join([sec] * n_cols)
+    sec_list, gov_list, ur_list = [], [], []
+    for i in range(1, n_cols + 1):
+        dims = girder_dims_mm(input_dict, i) if design_results else None
+        if dims:
+            d, _tw, bft, tft, bfb, tfb = dims
+            sec_list.append(f"{d:.0f} x {bft:.0f} x {tft:.0f} x {bfb:.0f} x {tfb:.0f}")
+        else:
+            sec_list.append(sec)
+        ctrl = bridge.get_controlling_check(i) if bridge else {}
+        gov_list.append(_tex(ctrl.get("name", "")) or NOT_STORED)
+        ur_list.append(f"{ctrl['dcr']:.2f} (Girder)" if ctrl.get("dcr") is not None else NOT_STORED)
+    sec_cells = ' & '.join(sec_list)
     sections = f"Section Designation & {sec_cells} \\\\"
-    gov_cells = ' & '.join([gov] * n_cols)
+    gov_cells = ' & '.join(gov_list)
     gov_checks = f"Governing Check & {gov_cells} \\\\"
-    ur_cells = ' & '.join([ur] * n_cols)
+    ur_cells = ' & '.join(ur_list)
     urs = f"Utilization Ratio & {ur_cells} \\\\"
 
     table1 = ('\\Needspace*{16\\baselineskip}\n'
               r'\noindent\textbf{Table 1 -- Final Bridge Geometry (after optimization)}' + '\n\n'
               + VSPACE_TABLE_SM + '\n'
-              r'\noindent' + '\n'
+              + (r'\begingroup\osDenseTable{}' + '\n' if n_cols > 5 else '')
+              + r'\noindent' + '\n'
               r'\begin{tabular}{' + col_spec + '}\n'
               r'\hline' + '\n'
               + header_row +
@@ -295,11 +315,13 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
               r'\hline' + '\n'
               + urs + '\n'
               r'\hline' + '\n'
-              r'\end{tabular}')
+              r'\end{tabular}\par' + '\n'
+              + (r'\endgroup' + '\n' if n_cols > 5 else '')
+              + not_stored_note(sec_cells + gov_cells + ur_cells))
 
     return r"""
 \newpage
-{\centering\Large\bfseries Executive Summary\par}
+{\centering""" + TITLE['heading'] + r""" Executive Summary\par}
 \addcontentsline{toc}{chapter}{Executive Summary}
 """ + VSPACE_TABLE_LG + r"""
 
@@ -326,13 +348,16 @@ This section provides a concise summary of the bridge design, key inputs, govern
 \hline
 \textbf{Deck Thickness} & """ + (_render_value(input_dict, KEY_TS_DECK_THICKNESS)) + r""" \\
 \hline
-\textbf{Overall Design Status} & """ + (_tex(overall_design_status)) + r""" \\
+\textbf{Overall Design Status} & """ + status_text + r""" \\
 \hline
 \textbf{Governing Check} & """ + gov + r""" \\
 \hline
 \textbf{Overall Utilization Ratio (max)} & """ + ur + r""" \\
 \hline
 \end{tabular}
+""" + not_stored_note(status_text + gov + ur + ''.join(
+        _render_value(input_dict, key) for key in (KEY_STRUCTURE_TYPE, KEY_SPAN, KEY_CARRIAGEWAY_WIDTH,
+                                                   KEY_TS_GIRDER_SPACING, KEY_TS_DECK_THICKNESS))) + r"""
 
 
 """ + plan_fig + r"""
@@ -340,7 +365,7 @@ This section provides a concise summary of the bridge design, key inputs, govern
 """ + cs_fig + '\n\n' + geom_fig + '\n\n' + table1 + r"""
 
 """ + VSPACE_TABLE_SM + r"""
-\noindent\textit{Note: Utilization ratio (UR) = demand / capacity. A value $< 1.0$ indicates a passing check.}
+\noindent\textit{Note: Utilization ratio (UR) = demand / capacity. A value $\leq 1.0$ indicates a passing check.}
 
 """ + VSPACE_SEC + r"""
 
@@ -365,6 +390,5 @@ Deck design """ + deck_result + r"""
 \end{itemize}
 
 % Restore numbered chapter format
-\titleformat{\chapter}[block]{\normalfont\Large\bfseries\centering}{\thechapter}{1em}{}
-\titlespacing*{\chapter}{0pt}{-30pt}{10pt}
+""" + chapter_format(TITLE['chapter_top_main']) + r"""
 """

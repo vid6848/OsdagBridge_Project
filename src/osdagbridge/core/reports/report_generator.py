@@ -119,7 +119,8 @@ from osdagbridge.core.utils.common import (
 )
 
 from osdagbridge.core.reports.report_utils import _tex
-from .styles import SPACING, TABLE_SPECS, VSPACE_MINI, preamble_block, status
+from .styles import (
+    SPACING, TABLE_SPECS, TITLE, chapter_format, preamble_block, status, toc_format)
 from .executive_summary import executive_summary
 from .chap1 import ch1_project_info
 from .chap2 import ch2_input_parameters
@@ -148,10 +149,10 @@ logger = logging.getLogger(__name__)
 # PREAMBLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def preamble(project_name, job_number, report_date, report_version='Rev 0'):
+def preamble(project_name, job_number, report_date, report_version='Rev 0', author=''):
     # values live in styles.py
     return preamble_block(dict(project=project_name, job=job_number,
-                               date=report_date, rev=report_version))
+                               date=report_date, rev=report_version, author=author))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -188,9 +189,9 @@ def title_page(m, osdag_logo, org_logo):
 \centering
 \osTitleTopSpace{}
 """ + logos_tex + r"""
-{\Huge \textbf{OsdagBridge}}\\[""" + SPACING['title_sub'] + r"""]
-{\large Open Source Software for Steel Girder Bridge Design}\\[""" + SPACING['title_top'] + r"""]
-{\Large Design Report}\\[""" + SPACING['title_top'] + r"""]
+{""" + TITLE['product'] + r""" \textbf{OsdagBridge}}\\[""" + SPACING['title_sub'] + r"""]
+{""" + TITLE['subtitle'] + r""" Open Source Software for Steel Girder Bridge Design}\\[""" + SPACING['title_top'] + r"""]
+{""" + TITLE['report'] + r""" Design Report}\\[""" + SPACING['title_top'] + r"""]
 \begin{tabular}{""" + TABLE_SPECS['title_meta'] + r"""}
 \hline
 \textbf{Project Name} & """ + _tex(m.project_name) + r""" \\
@@ -225,32 +226,14 @@ def title_page(m, osdag_logo, org_logo):
 def toc_section():
     return r"""
 % Chapter / TOC Formatting
-\titleformat{\chapter}[block]
-  {\normalfont\Large\bfseries\centering}{\thechapter}{1em}{}
-\titlespacing*{\chapter}{0pt}{0pt}{10pt}
+""" + chapter_format(TITLE['chapter_top']) + r"""
 \setcounter{tocdepth}{2}
 
 % TOC styling using titletoc
-\titlecontents{chapter}[1.5em]
-  {\normalfont""" + VSPACE_MINI + r"""}
-  {\contentslabel{1.5em}}
-  {\hspace*{-1.5em}}
-  {\hfill\contentspage}
-
-\titlecontents{section}[3.8em]
-  {\normalfont}
-  {\contentslabel{2.3em}}
-  {\hspace*{-2.3em}}
-  {\hfill\contentspage}
-
-\titlecontents{subsection}[7.0em]
-  {\normalfont}
-  {\contentslabel{3.2em}}
-  {\hspace*{-3.2em}}
-  {\hfill\contentspage}
+""" + toc_format() + r"""
 
 \newpage
-\renewcommand{\contentsname}{\centering\Large\bfseries Table of Contents}
+\renewcommand{\contentsname}{\centering""" + TITLE['heading'] + r""" Table of Contents}
 \tableofcontents
 """
 
@@ -420,26 +403,28 @@ class ReportDataBridge:
 
     def get_cb_governing_force(self, pair: str, member: str) -> tuple:
         """
-        Return (force_kN_str, force_type) for the governing (max absolute) force.
-        Used as the single demand value for capacity tables.
+        Return (force_kN_str, force_type) of the governing design of a member.
+
+        That is the force type with the higher UR. The larger force is not always
+        the critical one, because the compression capacity is much lower. If a UR
+        is missing the larger force is used.
         """
-        try:
-            pairs = self._cb_forces_dict()["pairs"][pair]
-            t_key = "diag_tension_kN"     if member == "diagonal" else "chord_tension_kN"
-            c_key = "diag_compression_kN" if member == "diagonal" else "chord_compression_kN"
-            t_val = pairs.get(t_key)
-            c_val = pairs.get(c_key)
-            if t_val is not None and c_val is not None:
-                if abs(c_val) >= abs(t_val):
-                    return (f"{c_val:.3f}", "compression")
-                return (f"{t_val:.3f}", "tension")
-            if c_val is not None:
-                return (f"{c_val:.3f}", "compression")
-            if t_val is not None:
-                return (f"{t_val:.3f}", "tension")
-        except (KeyError, TypeError):
-            pass
-        return ("", "compression")
+        forces = {}
+        for force_type in ("compression", "tension"):
+            force = self.get_cb_force(pair, member, force_type)
+            if force:
+                forces[force_type] = force
+        if not forces:
+            return ("", "compression")
+        urs = {}
+        for force_type in forces:
+            try:
+                urs[force_type] = float(self.get_cb_efficiency(pair, member, force_type))
+            except (TypeError, ValueError):
+                urs = {}
+                break
+        gov = max(forces, key=lambda t: (urs.get(t, 0.0), abs(float(forces[t]))))
+        return (forces[gov], gov)
 
     def get_cb_section(self, pair: str, member: str, force_type: str) -> str:
         """Section designation for a member e.g. '75 x 75 x 8'."""
@@ -536,16 +521,79 @@ class ReportDataBridge:
     def ed_is_bracing(self) -> bool:
         return "brac" in self.get_ed_type().strip().lower()
 
+    def get_ed_source(self) -> "ReportDataBridge":
+        """Where the end diaphragm tables read from.
+
+        Its own member designs if there are any (seen on a skew bridge), else
+        this object, which means the cross bracing results.
+        """
+        own = self.output_dict.get("end_diaphragm_design_results") or {}
+        forces = (self.output_dict.get("end_diaphragm_forces_dict") or {}).get("pairs") or {}
+        if not forces or not any(result for pair in own.values()
+                                 for member in pair.values() for result in member.values()):
+            return self
+        data = dict(self.output_dict)
+        data["crossbracing_design_results"] = own
+        # same lengths as the bracing, the forces are the diaphragm's own
+        data["crossbracing_forces_dict"] = dict(self._cb_forces_dict(), pairs=forces)
+        return ReportDataBridge(data, self.input_dict, self.payload)
+
     def get_ed_checks(self) -> list:
         """End diaphragm rows of the overall summary table: [(check, force type, worst)].
 
-        A bracing type end diaphragm is reported from the worst bracing members,
+        A bracing type end diaphragm is reported from its worst members,
         compression as Moment and tension as Shear. Table and chart both use this.
         """
         if not self.ed_is_bracing():
             return []
-        return [(check, ftype, self.get_cb_worst(ftype))
+        source = self.get_ed_source()
+        return [(check, ftype, source.get_cb_worst(ftype))
                 for check, ftype in (("Moment", "compression"), ("Shear", "tension"))]
+
+    # =====================================================================
+    # GIRDERS: every per-girder table, the summary and the chart use these
+    # =====================================================================
+
+    def girder_count(self) -> int:
+        from .report_utils import get_girder_entries
+        try:
+            return len(get_girder_entries(self.input_dict))
+        except (TypeError, ValueError):
+            return 0
+
+    def get_girder_results(self) -> list:
+        """Design results of G1..Gn, edge beams left out. [] if there are none."""
+        from .report_utils import main_girder_keys
+        per = (self.output_dict.get("design_results") or {}).get("per_girder") or {}
+        keys = main_girder_keys(per, self.girder_count())
+        if per and not keys:
+            logger.warning("%d design lines do not match %d girders, per-girder results left out",
+                           len(per), self.girder_count())
+        results = [per.get(k) or {} for k in keys]
+        for res in results:
+            demand = res.get("demand") or {}
+            # a failed analysis (NaN) reaches the design as zero demand, which would read PASS
+            if demand and not (demand.get("Mu_kNm") or demand.get("Vu_kN")):
+                logger.warning("zero girder demand, the analysis gave no valid result")
+                return []
+        return results
+
+    def get_girder_check(self, index: int, ids, name: str = None) -> dict:
+        """Worst check of girder Gi among the given check ids, or {}."""
+        results = self.get_girder_results()
+        if not 1 <= index <= len(results):
+            return {}
+        found = [c for c in (results[index - 1].get("checks") or [])
+                 if c.get("check_id") in ids and (name is None or c.get("name") == name)]
+        return max(found, key=lambda c: c.get("dcr") or 0.0) if found else {}
+
+    def get_controlling_check(self, index: int) -> dict:
+        """The check with the highest UR of girder Gi, or {}."""
+        results = self.get_girder_results()
+        if not 1 <= index <= len(results):
+            return {}
+        checks = results[index - 1].get("checks") or []
+        return max(checks, key=lambda c: c.get("dcr") or 0.0) if checks else {}
 
     def utilization_summary(self) -> dict:
         """
@@ -592,58 +640,11 @@ class ReportDataBridge:
             },
         }
 
-        # 1. Plate Girders: max DCR per girder
-        pg = (self.output_dict.get("design_results", {}) or {}).get("per_girder", {}) or {}
-
-        def _gkey(k):
-            try:
-                return (0, int(str(k).replace("G", "")))
-            except ValueError:
-                return (1, str(k))
-
-        # Only the bridge's own girders, same as Table 5.12 (G1..Gn). The
-        # results can hold extra keys (G6, G7 on a 5-girder bridge).
-        from .report_utils import get_girder_entries
-        from osdagbridge.core.utils.common import KEY_TS_NO_OF_GIRDERS
-        n_g = len(get_girder_entries(self.input_dict))
-        if not n_g:
-            try:
-                n_g = int(self.input_dict.get(KEY_TS_NO_OF_GIRDERS, 0))
-            except (TypeError, ValueError):
-                n_g = 0
-        own = {f"G{i}" for i in range(1, n_g + 1)}
-
-        for g in sorted(pg.keys(), key=_gkey):
-            if str(g).startswith("EB") or (own and str(g) not in own):
-                continue
-            gd = pg.get(g) or {}
-            max_dcr = 0.0
-            found = False
-            for chk in (gd.get("checks") or []):
-                d = chk.get("dcr")
-                if d is not None:
-                    try:
-                        df = float(d)
-                        if df > max_dcr:
-                            max_dcr = df
-                        found = True
-                    except (TypeError, ValueError):
-                        pass
-            for _lc, _ld in (gd.get("per_lc") or {}).items():
-                if str(_lc).lower().startswith("envelope"):
-                    continue
-                for chk in (_ld.get("checks") or []):
-                    d = chk.get("dcr")
-                    if d is not None:
-                        try:
-                            df = float(d)
-                            if df > max_dcr:
-                                max_dcr = df
-                            found = True
-                        except (TypeError, ValueError):
-                            pass
-            if found:
-                summary["girders"].append((str(g), round(max_dcr, 3)))
+        # 1. Plate Girders: the controlling check, as in the girder design summary
+        for i in range(1, self.girder_count() + 1):
+            dcr = self.get_controlling_check(i).get("dcr")
+            if dcr is not None:
+                summary["girders"].append((f"G{i}", float(dcr)))
 
         # 2. Deck Slab: checks matching Table 5.22
         dr = self.output_dict.get("deck_report_values", {}) or {}
@@ -671,7 +672,7 @@ class ReportDataBridge:
                 dem = _dv(dem_k)
                 cap = _dv(cap_k)
                 if cap > 0:
-                    summary["deck"].append((label, round(dem / cap, 3)))
+                    summary["deck"].append((label, dem / cap))
 
             # Crack width
             wk_lim = _dv(KEY_DD_WK_LIMIT)
@@ -681,7 +682,7 @@ class ReportDataBridge:
                     wks.append(_dv(KEY_DD_WK_OH))
                 gov_wk = max(wks) if wks else 0.0
                 if gov_wk > 0:
-                    summary["deck"].append(("Crack Width", round(gov_wk / wk_lim, 3)))
+                    summary["deck"].append(("Crack Width", gov_wk / wk_lim))
 
         # 3. Cross Bracing: max UR (demand / capacity) per girder pair, using
         # the governing force of each member exactly as Table 5.25 does.
@@ -697,7 +698,7 @@ class ReportDataBridge:
                     except (TypeError, ValueError):
                         pass
                 if urs:
-                    items.append((str(pair), round(max(urs), 3)))
+                    items.append((str(pair), max(urs)))
             return items
 
         summary["cross_bracing"] = _pair_urs()
@@ -1035,7 +1036,7 @@ def generate_report(payload, request):
                 logger.warning("Could not generate report charts: %s", e)
 
             doc_parts = []
-            doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
+            doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0', payload.metadata.designer))
             doc_parts.append(title_page(payload.metadata, osdag_logo_latex, org_logo_latex))
 
             if payload.options.include_toc:
