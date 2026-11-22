@@ -62,7 +62,6 @@ from osdagbridge.core.utils.common import (
     KEY_DS_TOP_CLEAR_COVER,
     KEY_MATERIAL_DECK_FCK,
     KEY_MATERIAL_DECK_FCTM,
-    KEY_MP_ED_TYPE,
     KEY_SD_BOTTOM_FLANGE_THICKNESS,
     KEY_SD_BOTTOM_FLANGE_WIDTH,
     KEY_SD_BS_FCD,
@@ -959,20 +958,11 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
     _cb_pairs_522 = bridge.get_cb_pairs()
 
     def _cb_row(force_type):
-        best = None  # (ur, pair, member, capacity_str)
-        for pair in _cb_pairs_522:
-            for member in ("diagonal", "chord"):
-                cap = bridge.get_cb_capacity(pair, member, force_type)
-                eff = bridge.get_cb_efficiency(pair, member, force_type)
-                try:
-                    ur = float(eff)
-                except (TypeError, ValueError):
-                    continue
-                if best is None or ur > best[0]:
-                    best = (ur, pair, member, cap)
+        best = bridge.get_cb_worst(force_type)
         if best is None:
             return ("---", "---", "---", "---")
-        ur, pair, member, cap = best
+        ur, pair, member = best
+        cap = bridge.get_cb_capacity(pair, member, force_type)
         gov = bridge.get_cb_gov_lc(pair, member, force_type) or "---"
         dem = f"{float(cap) * ur:.2f} kN" if cap else "---"
         cap_s = (cap + " kN") if cap else "---"
@@ -1025,15 +1015,11 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
     # End diaphragm: when configured as Cross Bracing it is designed as bracing
     # members → mirror the cross-bracing axial rows. For Rolled / Welded beam end
     # diaphragms the moment/shear design is not implemented yet → show a message.
-    _ed_type = ""
-    for _k, _v in bridge.input_dict.items():
-        if str(_k).startswith(KEY_MP_ED_TYPE) and _v:
-            _ed_type = str(_v)
-            break
-    _ed_is_cb = "brac" in _ed_type.strip().lower()
-    if _ed_is_cb:
-        _ed_moment_row = _row522(r"End Diaphragm --- Moment", _cb_row("compression"))
-        _ed_shear_row  = _row522(r"End Diaphragm --- Shear",  _cb_row("tension"))
+    _ed_checks = bridge.get_ed_checks()
+    if _ed_checks:
+        _ed_moment_row, _ed_shear_row = [
+            _row522("End Diaphragm --- " + check, _cb_row(ftype))
+            for check, ftype, _ in _ed_checks]
     else:
         _ed_msg = r"Rolled / Welded section --- design to be added"
         _ed_moment_row = _row522_msg(r"End Diaphragm --- Moment", _ed_msg)
@@ -1265,7 +1251,7 @@ This section presents all structural design checks performed by OsdagBridge. For
             r"\textbf{} & \textbf{Stress Range, $\Delta\sigma$ (MPa)} & \textbf{Fatigue Limit, $f_{fd}$ (MPa)} & \textbf{Utilization Ratio} & \textbf{Status} \osRowEnd{}",
             t512_content + "\n",
         )
-        + "\n\\noindent\\textit{Note: IRC 22 Cl. 605 --- governing of normal and shear fatigue (worst by DCR). Capacity reduction factor $\\mu_r$ applied where plate thickness > 25 mm.}\n"
+        + "\n\\noindent\\textit{Note: IRC 22 Cl. 605 --- governing of normal and shear fatigue (worst by DCR). Capacity reduction factor $\\mu_r$ applied where plate thickness $>$ 25 mm.}\n"
         + "\n\\osSectionSpace{}\n\\osTableSpaceSm{}\n"
         + longtable(
             TABLE_SPECS['ch5_girder_summary'],
