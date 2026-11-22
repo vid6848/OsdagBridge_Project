@@ -1,7 +1,4 @@
-"""
-Chart generation for OsdagBridge reports.
-Uses Figure and FigureCanvasAgg directly without pyplot for thread-safety.
-"""
+"""Charts for the report. No pyplot, so no display is needed."""
 
 import os
 import logging
@@ -13,15 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def generate_ur_chart(bridge, output_png_path: str) -> bool:
-    """
-    Generate a 4-panel utilization ratio (UR) bar chart:
-    - Plate Girders (max DCR per girder)
-    - Deck Slab (flexure, punching, shear, crack width)
-    - Cross Bracing (max UR per girder pair)
-    - End Diaphragms (Moment and Shear as in the summary table, or a note)
-
-    Returns True if the chart was successfully generated and written.
-    """
+    """Utilization chart for Section 5.5. True if the file was written."""
     try:
         summary = bridge.utilization_summary()
         fig = Figure(figsize=(float(CHART.get("width_in", 6.3)), 5.2), dpi=float(CHART.get("dpi", 200)))
@@ -63,7 +52,6 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
 
-            # Bar labels
             for bar, u in zip(bars, urs):
                 if u > 1.0:
                     lbl = f"{u:.2f}\nFAIL"
@@ -73,24 +61,23 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
                     lbl = f"{u:.2f}"
                     c = CHART["label_color"]
                     fw = "normal"
+                # no room above the bar between 0.9 and the limit line
+                va = "top" if 0.9 < u <= 1.0 else "bottom"
                 ax.annotate(lbl, (bar.get_x() + bar.get_width() / 2, u),
-                            ha="center", va="bottom", fontsize=7.5, color=c, fontweight=fw)
+                            ha="center", va=va, xytext=(0, -2 if va == "top" else 0),
+                            textcoords="offset points", fontsize=7.5, color=c, fontweight=fw)
 
             if len(labels) > 4:
                 ax.tick_params(axis="x", rotation=20, labelsize=8)
             else:
                 ax.tick_params(axis="x", labelsize=8.5)
 
-        # 1. Girders
         _plot_panel(axes[0, 0], "Plate Girders", summary.get("girders", []), ylabel=True)
 
-        # 2. Deck Slab
         _plot_panel(axes[0, 1], "Deck Slab", summary.get("deck", []), ylabel=False)
 
-        # 3. Cross Bracing
         _plot_panel(axes[1, 0], "Cross Bracing", summary.get("cross_bracing", []), ylabel=True)
 
-        # 4. End Diaphragms
         ed_info = summary.get("end_diaphragm", {})
         ax_ed = axes[1, 1]
         ax_ed.set_title("End Diaphragms", fontsize=10, fontweight="bold")
@@ -115,14 +102,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
 
 
 def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) -> bool:
-    """
-    Generate material quantity bar charts for Chapter 7:
-    - Structural steel tonnage (Plate Girders, Cross Bracing, End Diaphragms) in MT
-    - Concrete volume (Deck Slab) in m³
-    - Reinforcement steel weight (Deck Slab Rebar) in MT
-    Uses Figure and FigureCanvasAgg directly without pyplot.
-    Returns True if the chart was successfully generated and written.
-    """
+    """Quantity chart for Chapter 7. True if the file was written."""
     try:
         numeric = inputs_or_quantities.get("numeric_quantities", {})
         if not numeric:
@@ -161,7 +141,6 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
 
         grid_col = CHART.get("grid", "#E3E3E3")
 
-        # 1. Structural Steel Tonnage
         steel_labels = ["Plate Girders", "Cross Bracing", "End Diaphragms"]
         steel_vals = [g_t, cb_t, ed_t]
         steel_color = CHART["steel_color"]
@@ -176,7 +155,6 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             ax_steel.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
                               ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
-        # 2. Concrete Volume
         bars_c = ax_conc.bar(["Deck Slab"], [c_m3], color=CHART["concrete_color"], width=CHART["bar_width_single"], zorder=2)
         ax_conc.set_title("Concrete Volume (m³)", fontsize=9.5, fontweight="bold")
         ax_conc.set_ylabel("Volume (m³)", fontsize=8)
@@ -187,7 +165,6 @@ def generate_quantity_chart(inputs_or_quantities: dict, output_png_path: str) ->
             ax_conc.annotate(lbl, (b.get_x() + b.get_width() / 2, max(h, 0)),
                              ha="center", va="bottom", fontsize=8, color=CHART["label_color"])
 
-        # 3. Reinforcement Steel
         bars_r = ax_rebar.bar(["Deck Slab Rebar"], [r_t], color=CHART["rebar_color"], width=CHART["bar_width_single"], zorder=2)
         ax_rebar.set_title("Reinforcement Steel (MT)", fontsize=9.5, fontweight="bold")
         ax_rebar.set_ylabel("Weight (MT)", fontsize=8)
