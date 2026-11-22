@@ -99,7 +99,6 @@ def ch4_analysis(asum, fig_paths, bridge: "ReportDataBridge", span_m: float):
         + r' & \makecell{\textbf{Right }}\\'
     )
 
-    # dead, service and ULS envelope
     def _rxn(lc, side):
         try:
             value = float((rxn_summary.get(lc) or {})[side])
