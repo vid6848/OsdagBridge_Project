@@ -69,7 +69,7 @@ from osdagbridge.core.utils.common import (
     KEY_WC_THICKNESS
 )
 
-from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex, longtable, design_lanes
+from osdagbridge.core.reports.report_utils import _render_value, _render_size_mm, get_girder_entries, _tex, longtable, design_lanes
 from osdagbridge.core.reports.styles import (
     TABLE, TABLE_SPECS, ROW_END, ROW_END_LG,
     VSPACE_TABLE, VSPACE_TABLE_LG, VSPACE_TABLE_SM,
@@ -97,10 +97,15 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
     else:
         _lanes_text = f'{_lanes} (per IRC 5 Cl. 104.3.1)'
 
+    try:
+        _width_text = f"{float(input_dict.get(KEY_TS_OVERALL_WIDTH)):.2f}"
+    except (TypeError, ValueError):
+        _width_text = _render_value(input_dict, KEY_TS_OVERALL_WIDTH)
+
     # body for Typical Section table
     typical_section_body = (
         r'\textnormal{Overall Bridge Width (m)} & '
-        + _render_value(input_dict, KEY_TS_OVERALL_WIDTH)
+        + _width_text
         + r' \osRowEnd{}' + '\n\\hline\n'
         + r'\textnormal{No. of Girders} & '
         + _render_value(input_dict, KEY_TS_NO_OF_GIRDERS)
@@ -221,7 +226,6 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \end{table}
 \osTableSpace{}
 
-\newpage
 \section{Additional Inputs}
 \label{sec:additional-inputs}
 
@@ -277,17 +281,17 @@ def _girder_tables(input_dict, n_girders):
     # Helper: one girder-dimension row
     def _dim_row(g_lbl, i):
         return (g_lbl + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_DEPTH}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_DEPTH}.G{i}.M1"))
                 + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_WEB_THICKNESS}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_WEB_THICKNESS}.G{i}.M1"))
                 + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_WIDTH}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_WIDTH}.G{i}.M1"))
                 + ', '
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_THICKNESS}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_THICKNESS}.G{i}.M1"))
                 + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH}.G{i}.M1"))
                 + ', '
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS}.G{i}.M1", ' mm'))
+                + (_render_size_mm(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS}.G{i}.M1"))
                 + r""" \osRowEndLg{}
 \hline
 """)
@@ -345,8 +349,6 @@ def _girder_tables(input_dict, n_girders):
 
     return (
         r"""
-\newpage
-
 \osTableSpaceSm{}
 \noindent
 
@@ -425,8 +427,6 @@ def _bracing_tables(input_dict, n_girders):
 
     return (
         r"""
-\newpage
-
 \osTableSpaceSm{}
 """
         + longtable(
