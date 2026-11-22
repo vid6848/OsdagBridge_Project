@@ -248,6 +248,7 @@ def _packages():
 \usepackage{subcaption}
 \usepackage{multirow}
 \usepackage{colortbl}
+\usepackage{hhline}
 \usepackage{longtable}
 \setlength{\LTleft}{""" + TABLE["lt_left"] + r"""}
 \setlength{\LTright}{""" + TABLE["lt_right"] + r"""}

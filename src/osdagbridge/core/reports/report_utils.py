@@ -71,6 +71,55 @@ def _count_cols(col_spec):
     return max(1, len(cols))
 
 
+SHORT_TABLE_ROWS = 12
+
+
+def _keep_blocks_together(body, ncols):
+    """Stop a page break inside a girder block.
+
+    Rows inside a block end with \\osRowKeep (\\\\*), but the \\cline after
+    them adds a negative skip that LaTeX can still break at, so blocks split
+    and the continued rows lose their girder label. \\hhline has no such skip,
+    and the \\nopagebreak after it covers the gap before the next row.
+    """
+    import re
+
+    def _rule(m):
+        a, b = int(m.group(2)), int(m.group(3))
+        cells = ['~'] * (a - 1) + ['-'] * (b - a + 1) + ['~'] * (ncols - b)
+        # inside longtable \\nopagebreak is already a between-rows command
+        return m.group(1) + '\\hhline{|' + '|'.join(cells) + '|}\\nopagebreak'
+
+    return re.sub(r'(\\osRowKeep(?:Lg|Sm)?\{\}\s*)\\cline\{(\d+)-(\d+)\}', _rule, body)
+
+
+def design_lanes(input_dict):
+    """Number of traffic lanes for the report.
+
+    The Lane Details counter is disabled in Additional Inputs, so it is usually
+    empty. Then use IRC 6 Table 6 on the carriageway width, the same rule the
+    analyser uses. With a median the carriageway is split, so no value is guessed.
+    Returns (lanes, from_width) or (None, False).
+    """
+    from osdagbridge.core.utils.common import (
+        KEY_CARRIAGEWAY_WIDTH, KEY_INCLUDE_MEDIAN, KEY_WC_LD_LANE_TABLE_COUNT)
+    from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
+
+    val = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
+    if val not in (None, ''):
+        try:
+            return int(val), False
+        except (TypeError, ValueError):
+            pass
+    if str(input_dict.get(KEY_INCLUDE_MEDIAN, 'No')).strip().lower() in ('yes', 'true', '1'):
+        return None, False
+    try:
+        width = float(input_dict.get(KEY_CARRIAGEWAY_WIDTH))
+        return IRC6_2017.table_6(width), True
+    except (TypeError, ValueError):
+        return None, False
+
+
 def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_left=None):
     """Build a longtable with repeated headers on every page (R1).
 
@@ -96,6 +145,14 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
     grp_close = '\\endgroup\n' if overrides else ''
 
     ncols = _count_cols(col_spec)
+    body = _keep_blocks_together(body, ncols)
+
+    # Short tables: ask for room for the whole table before it starts, so a
+    # 5-row table does not leave one row alone on the next page. Rough height:
+    # 2 lines per row + 4 for caption and header. Long tables still split.
+    n_rows = body.count('\\hline') + body.count('\\cline')
+    if n_rows <= SHORT_TABLE_ROWS:
+        grp_open = '\\Needspace*{' + str(2 * n_rows + 4) + '\\baselineskip}\n' + grp_open
 
     cont_hdr = (
         '\\caption[]{\\textbf{' + caption + '} (continued)}\\\\\n'
