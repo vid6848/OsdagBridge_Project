@@ -71,7 +71,6 @@ def _is_on(val):
 def ch3_loads(input_dict):
     from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
 
-    # only vehicles ticked in the inputs
     # Vehicles where IRC 6 gives no braking definition (tracked/bogie types)
     _NO_BRAKING = {'Class AA (Tracked)', 'Class 70R (Bogie)'}
 
