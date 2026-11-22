@@ -88,7 +88,7 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
 \hline
 """)
 
-    # lane counter is usually empty; then show the IRC 6 Table 6 value
+    # lane counter is usually empty
     _lanes, _from_width = design_lanes(input_dict)
     if _lanes is None:
         _lanes_text = '---'
@@ -102,7 +102,6 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
     except (TypeError, ValueError):
         _width_text = _render_value(input_dict, KEY_TS_OVERALL_WIDTH)
 
-    # body for Typical Section table
     typical_section_body = (
         r'\textnormal{Overall Bridge Width (m)} & '
         + _width_text
@@ -127,7 +126,6 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
         + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
-    # body for Components Details table
     components_body = (
         r'\textnormal{Crash Barrier Type} & '
         + _render_value(input_dict, KEY_CB_TYPE)
@@ -446,7 +444,7 @@ def _bracing_tables(input_dict, n_girders):
         )
         + r'\osTableSpaceSm{}' + '\n'
         + longtable(
-            TABLE_SPECS['ch2_bracing'],
+            TABLE_SPECS['ch2_diaphragm'],
             'Member Properties: End Diaphragm Details',
             'tab:ch2:ed-details',
             ed_hdr,
