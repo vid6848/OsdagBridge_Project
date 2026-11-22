@@ -1,9 +1,56 @@
 from osdagbridge.core.utils.common import (
     KEY_MP_GD_MEMBER_ID,
     KEY_MP_GD_SELECT_GIRDER,
+    KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS,
+    KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH,
     KEY_MP_GIRDER_DEPTH,
+    KEY_MP_GIRDER_TOP_FLANGE_THICKNESS,
+    KEY_MP_GIRDER_TOP_FLANGE_WIDTH,
+    KEY_MP_GIRDER_WEB_THICKNESS,
     KEY_TS_NO_OF_GIRDERS
 )
+
+# shown instead of an empty cell, explained by not_stored_note()
+NOT_STORED = r'-\textsuperscript{\S}'
+
+
+def not_stored_note(tex):
+    """The footnote for NOT_STORED, only if the given table uses it."""
+    if NOT_STORED not in tex:
+        return ''
+    return '\\osTableFoot{\\textsuperscript{\\S} Not available in the design output.}\n'
+
+
+def main_girder_keys(per_girder, n_girders):
+    """Design result keys of the bridge's own girders, in order G1..Gn.
+
+    The design checks every longitudinal grid line and numbers them G1..Gm.
+    With a deck overhang the first and the last line are edge beams, so a
+    5 girder bridge has G1..G7 and the girders are G2..G6. The deflection and
+    Chapter 4 values already leave the edge beams out.
+    Returns [] if the lines cannot be matched, so no row gets a wrong label.
+    """
+    def order(key):
+        num = str(key)[1:]
+        return int(num) if num.isdigit() else 0
+
+    lines = sorted((k for k in per_girder if not str(k).startswith('EB')), key=order)
+    if not lines or n_girders < 1:
+        return []
+    if len(lines) == n_girders:
+        return lines
+    if len(lines) == n_girders + 2:
+        return lines[1:-1]
+    return []
+
+
+def girder_dims_mm(input_dict, index):
+    """[D, tw, bf top, tf top, bf bottom, tf bottom] of girder Gi in mm, or None."""
+    keys = (KEY_MP_GIRDER_DEPTH, KEY_MP_GIRDER_WEB_THICKNESS,
+            KEY_MP_GIRDER_TOP_FLANGE_WIDTH, KEY_MP_GIRDER_TOP_FLANGE_THICKNESS,
+            KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH, KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS)
+    dims = [_size_mm(input_dict.get(f"{k}.G{index}.M1")) for k in keys]
+    return None if None in dims else dims
 
 
 def _count_cols(col_spec):
@@ -149,6 +196,8 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
     scanner exits 0.  The 'continued' header uses \\caption[]{} so the counter
     does not increment and no extra List-of-Tables entry is added.
     """
+    import re
+
     overrides = []
     if tabcolsep:
         overrides.append('\\setlength{\\tabcolsep}{' + tabcolsep + '}')
@@ -162,12 +211,15 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
 
     # Short tables: ask for room for the whole table before it starts, so a
     # 5-row table does not leave one row alone on the next page. Rough height:
-    # 2 lines per row + 4 for caption and header. Long tables still split.
+    # 1.3 lines per row + 4 for caption and header. Long tables still split.
     n_rows = body.count('\\hline') + body.count('\\cline')
     if n_rows <= SHORT_TABLE_ROWS:
-        grp_open = '\\Needspace*{' + str(2 * n_rows + 4) + '\\baselineskip}\n' + grp_open
+        grp_open = '\\Needspace*{' + str(int(1.3 * n_rows) + 4) + '\\baselineskip}\n' + grp_open
 
     body = _keep_closing_rules(body)
+    # no empty cells. The first column is left alone, it is empty under a girder label
+    body = re.sub(r'(?<!\\)&(?=[ \t]*(?:&|\\osRow))',
+                  lambda _m: '& ' + NOT_STORED + ' ', body)
 
     cont_hdr = (
         '\\caption[]{\\textbf{' + caption + '} (continued)}\\\\\n'
@@ -198,6 +250,7 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
         + body
         + '\\end{longtable}\n'
         + grp_close
+        + not_stored_note(body)
     )
 
 
@@ -221,22 +274,29 @@ def _tex(value):
     return s.replace('≤', r'$\leq$').replace('≥', r'$\geq$')
 
 
-def _render_size_mm(source_dict, key):
-    '''Girder size in mm. After Design the inputs hold metres, before it mm.'''
+def _size_mm(value):
+    '''A girder size in mm. After Design the inputs hold metres, before it mm.'''
     try:
-        val = float(source_dict.get(key))
+        val = float(value)
     except (TypeError, ValueError):
-        return _render_value(source_dict, key)
+        return None
     # no plate is under 5 mm and no girder here is 5 m deep
     if val < 5:
         val *= 1000
-    return f"{round(val, 1):g} mm"
+    return round(val, 1)
+
+
+def _render_size_mm(source_dict, key):
+    val = _size_mm(source_dict.get(key))
+    if val is None:
+        return _render_value(source_dict, key)
+    return f"{val:g} mm"
 
 
 def _render_value(source_dict, key, unit=""):
     val = source_dict.get(key)
     if val in ("", None):
-        return ""
+        return NOT_STORED
     return _tex(val) + unit
 
 
