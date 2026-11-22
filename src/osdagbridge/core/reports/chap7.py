@@ -1,4 +1,5 @@
-from osdagbridge.core.reports.report_utils import longtable
+from osdagbridge.core.reports.report_utils import _tex, longtable
+from osdagbridge.core.utils.common import KEY_DECK_CONCRETE_GRADE_BASIC, KEY_DS_REINF_MATERIAL
 from osdagbridge.core.reports.styles import TABLE, TABLE_SPECS
 
 def ch7_quantities(input_dict, fig_paths=None):
@@ -11,6 +12,9 @@ def ch7_quantities(input_dict, fig_paths=None):
         r' & \textbf{Weight (MT)} & \textbf{Total Weight (MT)} \\'
     )
 
+    # grades as entered, the same as in Chapter 2
+    conc = _tex(input_dict.get(KEY_DECK_CONCRETE_GRADE_BASIC) or '---')
+    rebar = _tex(input_dict.get(KEY_DS_REINF_MATERIAL) or '---')
     body = (
         r'1 & Structural Steel (IS 2062) for Girders & '
         + _v("steel_girders_vol_formula") + r' & '
@@ -42,13 +46,13 @@ def ch7_quantities(input_dict, fig_paths=None):
         + _v("steel_ed_vol_total") + r' & '
         + _v("steel_ed_wt_single") + r' & '
         + _v("steel_ed_wt_total") + r' \\' + '\n\\hline\n'
-        + r'3 & Concrete (M40) for Deck Slab & '
+        + r'3 & Concrete (' + conc + r') for Deck Slab & '
         + _v("concrete_deck_vol_formula") + r' & '
         + _v("concrete_deck_qty") + r' & '
         + _v("concrete_deck_vol_total") + r' & '
         + _v("concrete_deck_wt_single") + r' & '
         + _v("concrete_deck_wt_total") + r' \\' + '\n\\hline\n'
-        + r'4 & Reinforcement Steel (Fe 500) & '
+        + r'4 & Reinforcement Steel (' + rebar + r') & '
         + _v("rebar_deck_vol_formula") + r' & '
         + _v("rebar_deck_qty") + r' & '
         + _v("rebar_deck_vol_total") + r' & '
@@ -85,7 +89,7 @@ def ch7_quantities(input_dict, fig_paths=None):
                 r"\begin{figure}[H]" + "\n"
                 r"\centering" + "\n"
                 r"\osFigPreSpace{}" + "\n"
-                r"\includegraphics[width=0.95\textwidth]{" + fig_paths["quantity_summary"].replace("\\", "/") + "}\n"
+                r"\includegraphics[width=\osChartW]{" + fig_paths["quantity_summary"].replace("\\", "/") + "}\n"
                 r"\osFigMidSpace{}" + "\n"
                 r"\caption{Material Take-off and Quantity Summary}" + "\n"
                 r"\label{fig:material-quantities}" + "\n"
