@@ -1,7 +1,14 @@
 from typing import List
 
 from osdagbridge.core.utils.common import (
-    KEY_DESIGN_MODE
+    KEY_DESIGN_MODE,
+    KEY_DO_GAMMA_M0,
+    KEY_DO_GAMMA_M1,
+    KEY_DO_GAMMA_MF,
+    KEY_DO_GAMMA_S,
+    KEY_MATERIAL_DECK_DENSITY,
+    KEY_MATERIAL_GIRDER_DENSITY,
+    KEY_WC_DENSITY,
 )
 from osdagbridge.core.reports.styles import TABLE_SPECS, VSPACE_SEC
 
@@ -36,7 +43,26 @@ def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
 
     mode = str(input_dict.get(KEY_DESIGN_MODE, 'Optimized')).strip().lower()
     is_custom = mode in {'custom', 'customized'}
-    return _ch8_assumptions(is_custom)
+    return _with_inputs(_ch8_assumptions(is_custom), input_dict)
+
+
+def _with_inputs(tex: str, input_dict: dict) -> str:
+    """Fill the @markers@ from the inputs, so Chapter 8 agrees with Chapters 2 and 3."""
+    for mark, key, default, nd in (
+        ('@steel@', KEY_MATERIAL_GIRDER_DENSITY, 78.5, 1),
+        ('@concrete@', KEY_MATERIAL_DECK_DENSITY, 25.0, 1),
+        ('@wearing@', KEY_WC_DENSITY, 24.0, 1),
+        ('@gm0@', KEY_DO_GAMMA_M0, 1.10, 2),
+        ('@gm1@', KEY_DO_GAMMA_M1, 1.25, 2),
+        ('@gs@', KEY_DO_GAMMA_S, 1.15, 2),
+        ('@gmft@', KEY_DO_GAMMA_MF, 1.35, 2),
+    ):
+        try:
+            value = float(input_dict.get(key))
+        except (TypeError, ValueError):
+            value = default
+        tex = tex.replace(mark, f"{value:.{nd}f}")
+    return tex
 
 
 def _ch8_assumptions(is_custom: bool) -> str:
@@ -111,7 +137,7 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
     \item All girders are modelled as simply supported; continuous spans are not currently supported.
     \item A 3D grillage model (OSPGrillage) is used for load distribution. Grillage members carry composite section properties after the construction stage.
     \item The transverse member forces are computed using an approximate 2D frame analogy. For irregular or skewed geometries, a 3D FEM is recommended.
-    \item Fixed bearing stiffness is modelled as $k = 1{,}000{,}000 \,\text{kN/m}$ (virtually rigid); free/expansion bearing as $k = 100 \, \text{kN/m}$.
+    \item Fixed bearing stiffness is modelled as $k = 1{,}000{,}000 \,\text{kN/m}$ (virtually rigid); free/\allowbreak{}expansion bearing as $k = 100 \, \text{kN/m}$.
     \item Construction stage sequence analysis is approximate. Detailed staged analysis should be performed for long-term deflection checks.
 \end{itemize}
 
@@ -139,19 +165,19 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 \textbf{Partial Safety Factors (IRC 22:2015 Cl.601.4)}
 
 \begin{itemize}
-\item $\gamma_{m0}$ (steel yield, ULS) = 1.10
-\item $\gamma_{m1}$ (steel ultimate, ULS) = 1.25
-\item Reinforcement (ULS) = 1.15
+\item $\gamma_{m0}$ (steel yield, ULS) = @gm0@
+\item $\gamma_{m1}$ (steel ultimate, ULS) = @gm1@
+\item Reinforcement (ULS) = @gs@
 \item Welds -- shop: 1.25; field: 1.50
-\item Fatigue ($\gamma_{mft}$) = 1.35
+\item Fatigue ($\gamma_{mft}$) = @gmft@
 \end{itemize}
 
 \textbf{Loading}
 
 \begin{itemize}
-\item Dead load densities per IRC 6:2017 Cl.203: structural steel $78.5 \ \text{kN/m}^3$, concrete $25.0 \ \text{kN/m}^3$, bituminous wearing course $24.0 \ \text{kN/m}^3$.
+\item Dead load densities per IRC 6:2017 Cl.203: structural steel $@steel@ \ \text{kN/m}^3$, concrete $@concrete@ \ \text{kN/m}^3$, wearing course $@wearing@ \ \text{kN/m}^3$.
 \item Multi-lane live load reduction factors per IRC 6:2017 Cl.204.4 Table 6A: 1st lane = 1.0, 2nd lane = 0.8, 3rd lane onwards = 0.4.
-\item Impact factor (dynamic load allowance) computed from span per IRC 6:2017 Cl.208.2/208.3.
+\item Impact factor (dynamic load allowance) computed from span per IRC 6:2017 Cl.208.2/\allowbreak{}208.3.
 \item Wind load applied as transverse, longitudinal, and vertical components per IRC 6:2017 Cl.209.3.3--209.3.5.
 \end{itemize}
 
@@ -173,7 +199,7 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 \textbf{Stiffener Design}
 
 \begin{itemize}
-\item Intermediate transverse stiffener and bearing stiffener design follows IS 800:2007 Cl.8.7.2/8.7.3 and IRC 24:2010 Cl.509.7.2/509.7.3.
+\item Intermediate transverse stiffener and bearing stiffener design follows IS 800:2007 Cl.8.7.2/\allowbreak{}8.7.3 and IRC 24:2010 Cl.509.7.2/\allowbreak{}509.7.3.
 \end{itemize}
 """)
 
