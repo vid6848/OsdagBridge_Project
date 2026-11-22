@@ -98,7 +98,7 @@ def generate_ur_chart(bridge, output_png_path: str) -> bool:
             _plot_panel(ax_ed, "End Diaphragms", ed_info.get("items", []), ylabel=False)
         else:
             msg = ed_info.get("message") or "Not designed in this version"
-            ax_ed.text(0.5, 0.5, f"{msg}\n(Rolled / Welded section)", ha="center", va="center",
+            ax_ed.text(0.5, 0.5, msg, ha="center", va="center",
                        transform=ax_ed.transAxes, color=CHART["muted_color"], fontstyle="italic", fontsize=8.5)
             ax_ed.set_xticks([])
             ax_ed.set_yticks([])

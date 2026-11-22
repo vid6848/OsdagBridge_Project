@@ -213,6 +213,8 @@ def title_page(m, osdag_logo, org_logo):
 \hline
 \end{tabular}
 \end{titlepage}
+% titlepage resets the counter to 1, so the next page would print "Page 1" again
+\setcounter{page}{2}
 """
 
 
@@ -565,8 +567,20 @@ class ReportDataBridge:
             except ValueError:
                 return (1, str(k))
 
+        # Only the bridge's own girders, same as Table 5.12 (G1..Gn). The
+        # results can hold extra keys (G6, G7 on a 5-girder bridge).
+        from .report_utils import get_girder_entries
+        from osdagbridge.core.utils.common import KEY_TS_NO_OF_GIRDERS
+        n_g = len(get_girder_entries(self.input_dict))
+        if not n_g:
+            try:
+                n_g = int(self.input_dict.get(KEY_TS_NO_OF_GIRDERS, 0))
+            except (TypeError, ValueError):
+                n_g = 0
+        own = {f"G{i}" for i in range(1, n_g + 1)}
+
         for g in sorted(pg.keys(), key=_gkey):
-            if str(g).startswith("EB"):
+            if str(g).startswith("EB") or (own and str(g) not in own):
                 continue
             gd = pg.get(g) or {}
             max_dcr = 0.0
@@ -635,35 +649,24 @@ class ReportDataBridge:
                 if gov_wk > 0:
                     summary["deck"].append(("Crack Width", round(gov_wk / wk_lim, 3)))
 
-        # 3. Cross Bracing: max UR per girder pair
-        cb_pairs = self.get_cb_pairs()
-        for pair in cb_pairs:
-            pair_max_ur = 0.0
-            found = False
-            for member in ("diagonal", "chord"):
-                for force_type in ("compression", "tension"):
-                    eff = self.get_cb_efficiency(pair, member, force_type)
-                    if eff:
-                        try:
-                            eff_f = float(eff)
-                            if eff_f > pair_max_ur:
-                                pair_max_ur = eff_f
-                            found = True
-                        except (TypeError, ValueError):
-                            pass
-                sl = self.get_cb_slenderness(pair, member)
-                if sl:
+        # 3. Cross Bracing: max UR (demand / capacity) per girder pair, using
+        # the governing force of each member exactly as Table 5.25 does.
+        # Slenderness is a separate check and is not mixed into the bars.
+        def _pair_urs():
+            items = []
+            for pair in self.get_cb_pairs():
+                urs = []
+                for member in ("diagonal", "chord"):
+                    _force, ftype = self.get_cb_governing_force(pair, member)
                     try:
-                        sl_f = float(sl)
-                        lim = 400.0 if member == "chord" else 250.0
-                        ratio = sl_f / lim
-                        if ratio > pair_max_ur:
-                            pair_max_ur = ratio
-                        found = True
+                        urs.append(float(self.get_cb_efficiency(pair, member, ftype)))
                     except (TypeError, ValueError):
                         pass
-            if found:
-                summary["cross_bracing"].append((str(pair), round(pair_max_ur, 3)))
+                if urs:
+                    items.append((str(pair), round(max(urs), 3)))
+            return items
+
+        summary["cross_bracing"] = _pair_urs()
 
         # 4. End Diaphragms: check if bracing vs rolled/welded
         ed_type = ""
@@ -686,6 +689,10 @@ class ReportDataBridge:
                             pass
                 if urs:
                     ed_items.append((str(pair), round(max(urs), 3)))
+            # No separate end diaphragm results: Table 5.28 then shows the
+            # cross-bracing members, so the chart shows the same values.
+            if not ed_items:
+                ed_items = list(summary["cross_bracing"])
         if ed_items:
             summary["end_diaphragm"] = {
                 "designed": True,
@@ -695,7 +702,9 @@ class ReportDataBridge:
         else:
             summary["end_diaphragm"] = {
                 "designed": False,
-                "message": "Not designed in this version",
+                "message": ("Rolled / Welded section:\nnot designed in this version"
+                            if ed_type and "brac" not in ed_type.lower()
+                            else "No end diaphragm results"),
                 "items": [],
             }
 
