@@ -381,8 +381,11 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             ed_wt_single = (ed_mass_pm * ed_len) / 1000.0
             ed_wt_total = ed_qty * ed_wt_single
 
+            # same "area x length = volume" form as the other rows
+            # (area from the mass per metre, steel 7850 kg/m^3)
+            ed_area = ed_mass_pm / 7850.0
             quantities["steel_ed_vol_formula"] = (
-                f"${ed_mass_pm:.2f}\\text{{ kg/m}} \\times {ed_len:.2f}\\text{{ m}} = {ed_vol_single:.5f}\\text{{ m}}^3$"
+                f"${ed_area:.5f}\\text{{ m}}^2 \\times {ed_len:.2f}\\text{{ m}} = {ed_vol_single:.5f}\\text{{ m}}^3$"
             )
             quantities["steel_ed_qty"] = str(ed_qty)
             quantities["steel_ed_vol_total"] = f"{ed_vol_total:.2f}"
@@ -402,7 +405,12 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         
         if cb_area_val is not None:
             try:
-                cb_area = float(cb_area_val) / 1e6
+                cb_area = float(cb_area_val)
+                # The default is in mm^2 but Additional Inputs saves m^2
+                # (e.g. 0.2724). No barrier is 1000 m^2 or 1000 mm^2, so
+                # convert only large values.
+                if cb_area >= 1000.0:
+                    cb_area = cb_area / 1e6
             except Exception:
                 pass
         
