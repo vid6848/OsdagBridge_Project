@@ -1,8 +1,4 @@
-"""Formatting values for the design report, kept in one place.
-
-The values below are the single source of truth for the report styling,
-geometry, fonts, colors, spacing, and table metrics.
-"""
+"""Formatting values for the design report, kept in one place."""
 from osdagbridge.core.reports.report_utils import _tex
 
 
@@ -27,11 +23,11 @@ FONT = dict(
 )
 
 COLORS = dict(
-    brand="91B014",            # osdagGreen
-    pass_="2E7D32",            # green for passing checks
-    fail="C62828",             # red for failing checks
-    warn="E65100",             # amber/orange for warnings
-    info="0277BD",             # blue for informational messages
+    brand="91B014",
+    pass_="2E7D32",
+    fail="C62828",
+    warn="E65100",
+    info="0277BD",
     sd_note="black",           # "* Software default value" note
     todo_bg="yellow",
 )
@@ -41,7 +37,7 @@ TABLE = dict(
     arraystretch=1.15,
     row_gap="0pt",            # no extra gap, so two girder blocks fit on a page
     row_gap_lg="2pt",
-    row_gap_sm="3pt",
+    row_gap_sm="12pt",        # between stacked formulas
     lt_left=r"\fill",
     lt_right=r"\fill",
     lt_pre="0pt",
@@ -128,7 +124,7 @@ CHART = dict(
     muted_color="#777777",
 )
 
-# LaTeX macro shortcuts and Python spacing tokens
+# short names for the LaTeX macros
 ROW_END = r"\osRowEnd{}"
 ROW_END_LG = r"\osRowEndLg{}"
 ROW_END_SM = r"\osRowEndSm{}"
@@ -146,21 +142,20 @@ VSPACE_TITLE_TOP = r"\osTitleTopSpace{}"
 
 
 def status(ok, text=None):
-    """Format PASS or FAIL badge using central style macros."""
+    """PASS or FAIL in the report colours."""
     if ok:
         return r"\osPass{}" if text is None else rf"\osPassText{{{text}}}"
     return r"\osFail{}" if text is None else rf"\osFailText{{{text}}}"
 
 
 def chapter_format(top):
-    """LaTeX for the chapter headings, with the given space above."""
+    """Chapter heading style, with the space above it."""
     return (r"\titleformat{\chapter}[block]{\normalfont" + TITLE["heading"] + r"\centering}{\thechapter}{"
             + TITLE["chapter_gap"] + "}{}\n"
             + r"\titlespacing*{\chapter}{0pt}{" + top + "}{" + TITLE["chapter_after"] + "}")
 
 
 def toc_format():
-    """LaTeX for the entries of the table of contents."""
     out = []
     for level, (indent, label) in TOC.items():
         space = VSPACE_MINI if level == "chapter" else ""
@@ -173,12 +168,7 @@ def toc_format():
 
 
 def colspec(*cols):
-    """Generate width-relative column specification for tabular/longtable.
-
-    Each argument is a (type_char, width_fraction) tuple, e.g. ('L', 0.35), ('p', 0.65).
-    Column widths are calculated as fractions of \\linewidth minus 2\\tabcolsep and vertical rules
-    so tables fit the text block perfectly without overflow.
-    """
+    """Column spec from (align, fraction of the line width) pairs."""
     parts = []
     n_cols = len(cols)
     extra_rule_adj = f"{1.0 / n_cols:.3f}".rstrip("0").rstrip(".")
@@ -198,9 +188,8 @@ def colspec(*cols):
     return "|" + "|".join(parts) + "|"
 
 
-# Central mapping of all table column specifications across the report
+# column layouts of the report tables
 TABLE_SPECS = {
-    # 2 columns
     "ch1_info": colspec(("L", 0.38), ("L", 0.62)),
     "two_col_desc": colspec(("L", 0.35), ("p", 0.65)),
     "two_col_wide_val": colspec(("L", 0.38), ("L", 0.62)),
@@ -208,19 +197,16 @@ TABLE_SPECS = {
     "two_col_combos": colspec(("C", 0.25), ("p", 0.75)),
     "two_col_defl": colspec(("L", 0.45), ("p", 0.55)),
     "title_meta": colspec(("L", 0.28), ("L", 0.72)),
-    # Chapter 2 multi-column
     "ch2_girder_info": colspec(("L", 0.14), ("L", 0.14), ("p", 0.24), ("p", 0.24), ("p", 0.24)),
     "ch2_girder_dim": colspec(("L", 0.12), ("L", 0.15), ("L", 0.12), ("p", 0.31), ("p", 0.30)),
     "ch2_girder_restraint": colspec(("L", 0.11), ("p", 0.16), ("p", 0.15), ("p", 0.22), ("p", 0.185), ("p", 0.175)),
-    "ch2_bracing": colspec(("L", 0.15), ("L", 0.15), ("L", 0.20), ("L", 0.18), ("C", 0.16), ("C", 0.16)),
-    # Chapter 3
+    "ch2_bracing": colspec(("L", 0.17), ("L", 0.19), ("L", 0.22), ("L", 0.25), ("C", 0.17)),
+    "ch2_diaphragm": colspec(("L", 0.22), ("L", 0.22), ("L", 0.26), ("L", 0.30)),
     "five_col_loads": colspec(("L", 0.28), ("C", 0.16), ("C", 0.14), ("C", 0.24), ("C", 0.18)),
     "ch3_vehicle_loads": colspec(("L", 0.19), ("C", 0.16), ("C", 0.12), ("C", 0.19), ("C", 0.15), ("C", 0.19)),
-    # Chapter 4
     "ch4_demands": colspec(("C", 0.18), ("C", 0.11), ("C", 0.09), ("C", 0.09), ("C", 0.11), ("C", 0.09), ("C", 0.09), ("C", 0.12), ("C", 0.12)),
     "ch4_reactions": colspec(("C", 0.33), ("C", 0.33), ("C", 0.34)),
     "ch4_deflection": colspec(("L", 0.45), ("p", 0.55)),
-    # Chapter 5 girder tables
     "ch5_sec_prop": colspec(("C", 0.16), ("L", 0.52), ("p", 0.32)),
     "ch5_sec_class": colspec(("C", 0.16), ("L", 0.20), ("C", 0.23), ("C", 0.16), ("p", 0.25)),
     "ch5_moment_cap": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.26), ("C", 0.12)),
@@ -233,11 +219,9 @@ TABLE_SPECS = {
     "ch5_serv_stress": colspec(("C", 0.16), ("L", 0.23), ("C", 0.23), ("p", 0.23), ("C", 0.15)),
     "ch5_fatigue": colspec(("C", 0.16), ("C", 0.23), ("C", 0.23), ("p", 0.23), ("C", 0.15)),
     "ch5_girder_summary": colspec(("C", 0.11), ("p", 0.24), ("C", 0.16), ("C", 0.13), ("C", 0.14), ("C", 0.11), ("C", 0.11)),
-    # Chapter 5 shear connector tables
     "ch5_sc_cap": colspec(("L", 0.24), ("C", 0.38), ("p", 0.18), ("L", 0.20)),
     "ch5_sc_spacing": colspec(("L", 0.23), ("p", 0.31), ("p", 0.31), ("C", 0.15)),
     "ch5_sc_transverse": colspec(("L", 0.37), ("p", 0.49), ("C", 0.14)),
-    # Chapter 5 deck slab tables
     "ch5_deck_loading": colspec(("L", 0.35), ("p", 0.65)),
     "ch5_deck_flexure": colspec(("C", 0.19), ("C", 0.23), ("C", 0.19), ("p", 0.27), ("C", 0.12)),
     "ch5_deck_cantilever": colspec(("L", 0.35), ("C", 0.23), ("p", 0.29), ("C", 0.13)),
@@ -245,18 +229,14 @@ TABLE_SPECS = {
     "ch5_deck_crack": colspec(("L", 0.45), ("p", 0.55)),
     "ch5_deck_oneway": colspec(("L", 0.35), ("C", 0.23), ("p", 0.29), ("C", 0.13)),
     "ch5_deck_rebar": colspec(("L", 0.35), ("p", 0.27), ("p", 0.26), ("C", 0.12)),
-    # Chapter 5 bracing and diaphragm tables
     "ch5_cb_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
     "ch5_cb_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
     "ch5_cb_capacity": colspec(("C", 0.125), ("L", 0.12), ("C", 0.135), ("C", 0.19), ("C", 0.12), ("C", 0.13), ("C", 0.08), ("C", 0.10)),
     "ch5_ed_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
     "ch5_ed_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
     "ch5_ed_capacity": colspec(("C", 0.125), ("L", 0.12), ("C", 0.135), ("C", 0.19), ("C", 0.12), ("C", 0.13), ("C", 0.08), ("C", 0.10)),
-    # Chapter 5 overall summary
     "ch5_overall_summary": colspec(("C", 0.24), ("L", 0.32), ("C", 0.16), ("C", 0.16), ("p", 0.12)),
-    # Chapter 7
     "ch7_boq": colspec(("C", 0.08), ("L", 0.24), ("C", 0.19), ("C", 0.13), ("C", 0.12), ("C", 0.12), ("C", 0.12)),
-    # Chapter 8
     "ch8_history": colspec(("C", 0.10), ("C", 0.10), ("p", 0.80)),
 }
 
@@ -376,7 +356,6 @@ def _pdf_text(value):
 
 
 def preamble_block(meta):
-    """Return the LaTeX preamble up to \\begin{document}."""
     vals = {k: _tex(meta.get(k, '')) for k in ('project', 'job', 'date', 'rev')}
     head_l = HEADER_FOOTER["left"].format(**vals)
     head_r = HEADER_FOOTER["right"].format(**vals)
@@ -399,14 +378,13 @@ def preamble_block(meta):
 \setstretch{""" + str(FONT["linespread"]) + r"""}
 \setlength{\emergencystretch}{""" + FONT["emergency_stretch"] + r"""}
 
-% Custom Commands and Column Types
+% Custom Commands
 \newcommand{\placeholder}[1]{\textit{\textless #1\textgreater}}
 \newcommand{\todo}[1]{\colorbox{""" + COLORS["todo_bg"] + r"""}{TODO: #1}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
-% Row End and Spacing Macros
 \makeatletter
 \def\osRowEnd{\@ifnextchar\bgroup{\osRowEnd@gobble}{\\[""" + TABLE["row_gap"] + r"""]}}
 \def\osRowEnd@gobble#1{\\[""" + TABLE["row_gap"] + r"""]}
@@ -438,7 +416,6 @@ def preamble_block(meta):
 \newcommand{\osFigPlotH}{""" + FIGURE["plot_height"] + r"""}
 \newcommand{\osFigSectionH}{""" + FIGURE["section_height"] + r"""}
 
-% Status and Logging Macros
 \newcommand{\osPass}{\textcolor{osdagPass}{\textbf{PASS}}}
 \newcommand{\osFail}{\textcolor{osdagFail}{\textbf{FAIL}}}
 \newcommand{\osPassText}[1]{\textcolor{osdagPass}{#1}}
