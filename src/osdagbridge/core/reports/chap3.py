@@ -57,8 +57,8 @@ from osdagbridge.core.utils.common import (
     KEY_WL_VERTICAL_WIND_FORCE
 )
 
-from osdagbridge.core.reports.report_utils import _tex, _render_value, longtable, design_lanes
-from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, VSPACE_SEC
+from osdagbridge.core.reports.report_utils import NOT_STORED, _tex, _render_value, longtable, design_lanes
+from osdagbridge.core.reports.styles import TABLE, TABLE_SPECS, ROW_END, VSPACE_SEC
 
 
 def _is_on(val):
@@ -213,7 +213,7 @@ def ch3_loads(input_dict):
             + '}'
         )
     veh_hdr  = (
-        r'\multirow{2}{*}{\textbf{Vehicle}} & \multirow{2}{*}{\makecell{\textbf{Total}\\\textbf{Load}\\\textbf{(kN)}}}'
+        r'\multirow{2}{*}{\textbf{Vehicle}} & \multirow{2}{*}{\makecell{\textbf{Total Load}\\\textbf{(kN)}}}'
         r' & \multirow{2}{*}{\makecell{\textbf{Impact}\\\textbf{Factor}}} & \multicolumn{3}{c|}{\textbf{Braking Load}} \\'
         '\n\\cline{4-6}\n'
         r' & & & \textbf{Considered?} & \textbf{Value (kN)' + _brk_mark + r'} & \textbf{Eccentricity (m)} \\'
@@ -483,9 +483,9 @@ def ch3_loads(input_dict):
         + _sl(sl_av)
         + r' \osRowEnd{}' + '\n\\hline\n'
         + r'\textnormal{Horizontal Seismic Force (longitudinal)} & '
-        + r' kN \osRowEnd{}' + '\n\\hline\n'
+        + NOT_STORED + r' \osRowEnd{}' + '\n\\hline\n'
         + r'\textnormal{Horizontal Seismic Force (transverse)} & '
-        + r' kN \osRowEnd{}' + '\n\\hline\n'
+        + NOT_STORED + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
     # Temperature body
@@ -528,7 +528,8 @@ def ch3_loads(input_dict):
         + longtable(TABLE_SPECS['ch3_vehicle_loads'],
                     'Vehicle Live Loads (LL) --- per IRC~6',
                     'tab:ch3:vehicle-live-loads',
-                    veh_hdr, veh_body)
+                    veh_hdr, veh_body,
+                    tabcolsep=TABLE['tabcolsep_narrow'])
         + '\n'
         + (_brk_note + '\n' if _brk_note else '')
         + _dag_note
