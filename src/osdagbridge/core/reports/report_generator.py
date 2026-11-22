@@ -150,7 +150,6 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def preamble(project_name, job_number, report_date, report_version='Rev 0', author=''):
-    # values live in styles.py
     return preamble_block(dict(project=project_name, job=job_number,
                                date=report_date, rev=report_version, author=author))
 
@@ -214,7 +213,7 @@ def title_page(m, osdag_logo, org_logo):
 \hline
 \end{tabular}
 \end{titlepage}
-% titlepage resets the counter to 1, so the next page would print "Page 1" again
+% titlepage resets the page counter
 \setcounter{page}{2}
 """
 
@@ -402,13 +401,8 @@ class ReportDataBridge:
         return ""
 
     def get_cb_governing_force(self, pair: str, member: str) -> tuple:
-        """
-        Return (force_kN_str, force_type) of the governing design of a member.
-
-        That is the force type with the higher UR. The larger force is not always
-        the critical one, because the compression capacity is much lower. If a UR
-        is missing the larger force is used.
-        """
+        """(force, force type) of the design with the higher UR.
+        Uses the larger force if a UR is missing."""
         forces = {}
         for force_type in ("compression", "tension"):
             force = self.get_cb_force(pair, member, force_type)
@@ -522,11 +516,7 @@ class ReportDataBridge:
         return "brac" in self.get_ed_type().strip().lower()
 
     def get_ed_source(self) -> "ReportDataBridge":
-        """Where the end diaphragm tables read from.
-
-        Its own member designs if there are any (seen on a skew bridge), else
-        this object, which means the cross bracing results.
-        """
+        """The end diaphragm's own results if it has any, else the bracing."""
         own = self.output_dict.get("end_diaphragm_design_results") or {}
         forces = (self.output_dict.get("end_diaphragm_forces_dict") or {}).get("pairs") or {}
         if not forces or not any(result for pair in own.values()
@@ -534,25 +524,19 @@ class ReportDataBridge:
             return self
         data = dict(self.output_dict)
         data["crossbracing_design_results"] = own
-        # same lengths as the bracing, the forces are the diaphragm's own
+        # the lengths are the same as the bracing
         data["crossbracing_forces_dict"] = dict(self._cb_forces_dict(), pairs=forces)
         return ReportDataBridge(data, self.input_dict, self.payload)
 
     def get_ed_checks(self) -> list:
-        """End diaphragm rows of the overall summary table: [(check, force type, worst)].
-
-        A bracing type end diaphragm is reported from its worst members,
-        compression as Moment and tension as Shear. Table and chart both use this.
-        """
+        """End diaphragm rows, used by Table 5.29 and the chart."""
         if not self.ed_is_bracing():
             return []
         source = self.get_ed_source()
         return [(check, ftype, source.get_cb_worst(ftype))
                 for check, ftype in (("Moment", "compression"), ("Shear", "tension"))]
 
-    # =====================================================================
-    # GIRDERS: every per-girder table, the summary and the chart use these
-    # =====================================================================
+    # per-girder values for the tables and the chart
 
     def girder_count(self) -> int:
         from .report_utils import get_girder_entries
@@ -572,7 +556,7 @@ class ReportDataBridge:
         results = [per.get(k) or {} for k in keys]
         for res in results:
             demand = res.get("demand") or {}
-            # a failed analysis (NaN) reaches the design as zero demand, which would read PASS
+            # a failed analysis reaches the design as zero demand
             if demand and not (demand.get("Mu_kNm") or demand.get("Vu_kN")):
                 logger.warning("zero girder demand, the analysis gave no valid result")
                 return []
@@ -596,21 +580,7 @@ class ReportDataBridge:
         return max(checks, key=lambda c: c.get("dcr") or 0.0) if checks else {}
 
     def utilization_summary(self) -> dict:
-        """
-        Collect numeric utilization ratios (UR / DCR) for all structural components.
-        Reuses the exact data sources and worst-case logic of Table 5.22.
-        Returns:
-            {
-                "girders": [(label, ur), ...],
-                "deck": [(label, ur), ...],
-                "cross_bracing": [(label, ur), ...],
-                "end_diaphragm": {
-                    "designed": bool,
-                    "message": str,
-                    "items": [(label, ur), ...]
-                }
-            }
-        """
+        """UR values for the chart, from the same data as the tables."""
         from osdagbridge.core.utils.common import (
             KEY_DD_HAS_OVERHANG,
             KEY_DD_M_ULS_HOG,
@@ -640,13 +610,11 @@ class ReportDataBridge:
             },
         }
 
-        # 1. Plate Girders: the controlling check, as in the girder design summary
         for i in range(1, self.girder_count() + 1):
             dcr = self.get_controlling_check(i).get("dcr")
             if dcr is not None:
                 summary["girders"].append((f"G{i}", float(dcr)))
 
-        # 2. Deck Slab: checks matching Table 5.22
         dr = self.output_dict.get("deck_report_values", {}) or {}
         if dr:
             def _dv(k):
@@ -674,7 +642,6 @@ class ReportDataBridge:
                 if cap > 0:
                     summary["deck"].append((label, dem / cap))
 
-            # Crack width
             wk_lim = _dv(KEY_DD_WK_LIMIT)
             if wk_lim > 0:
                 wks = [_dv(KEY_DD_WK_BOT), _dv(KEY_DD_WK_TOP)]
@@ -684,9 +651,7 @@ class ReportDataBridge:
                 if gov_wk > 0:
                     summary["deck"].append(("Crack Width", gov_wk / wk_lim))
 
-        # 3. Cross Bracing: max UR (demand / capacity) per girder pair, using
-        # the governing force of each member exactly as Table 5.25 does.
-        # Slenderness is a separate check and is not mixed into the bars.
+        # worst member of each pair, as in Table 5.25
         def _pair_urs():
             items = []
             for pair in self.get_cb_pairs():
@@ -703,7 +668,6 @@ class ReportDataBridge:
 
         summary["cross_bracing"] = _pair_urs()
 
-        # 4. End Diaphragms: the same Moment and Shear values as the summary table
         ed_type = self.get_ed_type()
         ed_items = [(check, worst[0])
                     for check, _ftype, worst in self.get_ed_checks() if worst]
@@ -924,7 +888,6 @@ _FIGURE_MAP = [
     ('defl_ll',               'defl_ll.png'),
 ]
 
-# small section sketches that come with a wide empty border
 _TRIM_FIGURES = ('cb_bracing', 'cb_top_chord', 'cb_bottom_chord',
                  'ed_bracing', 'ed_top_chord', 'ed_bottom_chord')
 
@@ -1022,7 +985,6 @@ def generate_report(payload, request):
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
 
-            # Generate charts for report
             try:
                 from .report_charts import generate_ur_chart, generate_quantity_chart
                 ur_chart_path = os.path.join(tmp_images, 'ur_summary.png')
@@ -1110,7 +1072,7 @@ def generate_report(payload, request):
             if os.path.exists(tmp_pdf):
                 shutil.copy2(tmp_pdf, pdf_path)
 
-            # Copy assets and images to output_dir so saved .tex is fully compilable standalone
+            # the saved .tex needs these beside it
             out_assets = os.path.join(request.output_dir, 'assets')
             if os.path.exists(tmp_assets):
                 shutil.copytree(tmp_assets, out_assets, dirs_exist_ok=True)

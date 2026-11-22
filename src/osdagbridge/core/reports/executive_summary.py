@@ -183,7 +183,6 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     geom_fig = _fig_or_placeholder(fig_paths.get('final_geometry'),
                                     'Figure 3 -- 3D View of Bridge Superstructure')
 
-    # Each girder gets its own section, governing check and UR.
     # The section designation is produced by the designer pipeline, so it lives
     # in output_dict (not input_dict).
     sec = _render_value(output_dict, KEY_SD_SECTION_DESIGNATION)
@@ -203,7 +202,7 @@ def executive_summary(input_dict, output_dict, fig_paths, bridge=None) -> str:
     failing = []                        # failing check names (order-preserving, deduped)
     gov_name, gov_dcr = "", None
     girder_max_ur = None
-    for gd in per_girder:                # the bridge's own girders only
+    for gd in per_girder:
         for chk in (gd.get("checks") or []):
             try:
                 _val = chk.get("dcr")
@@ -344,9 +343,9 @@ This section provides a concise summary of the bridge design, key inputs, govern
 \hline
 \textbf{No. of Girders} & """ + (_render_value(input_dict, KEY_TS_NO_OF_GIRDERS)) + r""" \\
 \hline
-\textbf{Girder Spacing} & """ + (_render_value(input_dict, KEY_TS_GIRDER_SPACING)) + r""" \\
+\textbf{Girder Spacing} & """ + (_render_value(input_dict, KEY_TS_GIRDER_SPACING, ' m')) + r""" \\
 \hline
-\textbf{Deck Thickness} & """ + (_render_value(input_dict, KEY_TS_DECK_THICKNESS)) + r""" \\
+\textbf{Deck Thickness} & """ + (_render_value(input_dict, KEY_TS_DECK_THICKNESS, ' mm')) + r""" \\
 \hline
 \textbf{Overall Design Status} & """ + status_text + r""" \\
 \hline
