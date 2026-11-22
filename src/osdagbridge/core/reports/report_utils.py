@@ -10,26 +10,19 @@ from osdagbridge.core.utils.common import (
     KEY_TS_NO_OF_GIRDERS
 )
 
-# shown instead of an empty cell, explained by not_stored_note()
+# shown instead of an empty cell
 NOT_STORED = r'-\textsuperscript{\S}'
 
 
 def not_stored_note(tex):
-    """The footnote for NOT_STORED, only if the given table uses it."""
     if NOT_STORED not in tex:
         return ''
     return '\\osTableFoot{\\textsuperscript{\\S} Not available in the design output.}\n'
 
 
 def main_girder_keys(per_girder, n_girders):
-    """Design result keys of the bridge's own girders, in order G1..Gn.
-
-    The design checks every longitudinal grid line and numbers them G1..Gm.
-    With a deck overhang the first and the last line are edge beams, so a
-    5 girder bridge has G1..G7 and the girders are G2..G6. The deflection and
-    Chapter 4 values already leave the edge beams out.
-    Returns [] if the lines cannot be matched, so no row gets a wrong label.
-    """
+    """Result keys of the real girders. With an overhang the first and
+    last design lines are edge beams. [] if the lines do not match."""
     def order(key):
         num = str(key)[1:]
         return int(num) if num.isdigit() else 0
@@ -54,10 +47,7 @@ def girder_dims_mm(input_dict, index):
 
 
 def _count_cols(col_spec):
-    """Count longtable columns from a LaTeX column spec string.
-
-    Handles modifiers like >{...}, @{...}, repeated specs *{N}{...}, and column types.
-    """
+    """Number of columns in a LaTeX column spec."""
     import re
     spec = col_spec.strip()
 
@@ -87,7 +77,6 @@ def _count_cols(col_spec):
         else:
             break
 
-    # strip modifiers: >, <, @, !
     out = []
     i = 0
     n = len(spec)
@@ -100,7 +89,6 @@ def _count_cols(col_spec):
             i += 1
     spec = "".join(out)
 
-    # strip width arguments for column types L, C, R, p, m, b
     out = []
     i = 0
     n = len(spec)
@@ -122,13 +110,7 @@ SHORT_TABLE_ROWS = 12
 
 
 def _keep_blocks_together(body, ncols):
-    """Stop a page break inside a girder block.
-
-    Rows inside a block end with \\osRowKeep (\\\\*), but the \\cline after
-    them adds a negative skip that LaTeX can still break at, so blocks split
-    and the continued rows lose their girder label. \\hhline has no such skip,
-    and the \\nopagebreak after it covers the gap before the next row.
-    """
+    """Keep a girder block on one page. A cline allows a break, hhline does not."""
     import re
 
     def _rule(m):
@@ -141,11 +123,7 @@ def _keep_blocks_together(body, ncols):
 
 
 def _keep_closing_rules(body):
-    """Keep the rule under a row on the same page as the row.
-
-    A plain row end allows a break before \\hline, which leaves the last block
-    on a page open at the bottom.
-    """
+    """Keep the rule under a row on the same page as the row."""
     import re
 
     body = re.sub(r'\\osRowEnd(Lg|Sm)?\{\}(?:\s*\\cline\{\d+-\d+\})?(\s*\\hline)',
@@ -154,13 +132,8 @@ def _keep_closing_rules(body):
 
 
 def design_lanes(input_dict):
-    """Number of traffic lanes for the report.
-
-    The Lane Details counter is disabled in Additional Inputs, so it is usually
-    empty. Then use IRC 6 Table 6 on the carriageway width, the same rule the
-    analyser uses. With a median the carriageway is split, so no value is guessed.
-    Returns (lanes, from_width) or (None, False).
-    """
+    """Lanes from the input, else from IRC 6 Table 6.
+    Returns (lanes, from_width) or (None, False)."""
     from osdagbridge.core.utils.common import (
         KEY_CARRIAGEWAY_WIDTH, KEY_INCLUDE_MEDIAN, KEY_WC_LD_LANE_TABLE_COUNT)
     from osdagbridge.core.utils.codes.irc6_2017 import IRC6_2017
@@ -181,21 +154,7 @@ def design_lanes(input_dict):
 
 
 def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_left=None):
-    """Build a longtable with repeated headers on every page (R1).
-
-    Args:
-        col_spec  : LaTeX column specification string (e.g. from styles.TABLE_SPECS)
-        caption   : plain-text caption (will be wrapped in \\textbf inside \\caption)
-        label     : LaTeX label string, e.g. 'tab:ch2:typical-section'
-        header_row: raw LaTeX for the header row(s) ending with \\\\ (no trailing \\hline)
-        body      : raw LaTeX rows for the table body
-        tabcolsep : optional override for \\tabcolsep inside this table only (string, e.g. '4pt')
-        lt_left   : optional override for \\LTleft inside this table only (string, e.g. '0pt')
-
-    Returns a string of LaTeX that contains \\endfirsthead and \\endhead so the
-    scanner exits 0.  The 'continued' header uses \\caption[]{} so the counter
-    does not increment and no extra List-of-Tables entry is added.
-    """
+    """Longtable that repeats its header on each page."""
     import re
 
     overrides = []
@@ -209,15 +168,13 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
     ncols = _count_cols(col_spec)
     body = _keep_blocks_together(body, ncols)
 
-    # Short tables: ask for room for the whole table before it starts, so a
-    # 5-row table does not leave one row alone on the next page. Rough height:
-    # 1.3 lines per row + 4 for caption and header. Long tables still split.
+    # short tables start on a new page if they do not fit
     n_rows = body.count('\\hline') + body.count('\\cline')
     if n_rows <= SHORT_TABLE_ROWS:
         grp_open = '\\Needspace*{' + str(int(1.3 * n_rows) + 4) + '\\baselineskip}\n' + grp_open
 
     body = _keep_closing_rules(body)
-    # no empty cells. The first column is left alone, it is empty under a girder label
+    # the first column is empty under a girder label
     body = re.sub(r'(?<!\\)&(?=[ \t]*(?:&|\\osRow))',
                   lambda _m: '& ' + NOT_STORED + ' ', body)
 
@@ -228,7 +185,6 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
         '\\hline\n'
     )
 
-    # endfoot: right-aligned "continued" note spanning all columns
     endfoot = (
         '\\multicolumn{' + str(ncols) + '}{r}{'
         '\\footnotesize\\textit{Continued on next page}}\\\\\n'
