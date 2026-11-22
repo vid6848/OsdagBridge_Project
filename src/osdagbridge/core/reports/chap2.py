@@ -69,7 +69,7 @@ from osdagbridge.core.utils.common import (
     KEY_WC_THICKNESS
 )
 
-from osdagbridge.core.reports.report_utils import _render_value, _render_size_mm, get_girder_entries, _tex, longtable, design_lanes
+from osdagbridge.core.reports.report_utils import _render_value, _render_size_mm, not_stored_note, get_girder_entries, _tex, longtable, design_lanes
 from osdagbridge.core.reports.styles import (
     TABLE, TABLE_SPECS, ROW_END, ROW_END_LG,
     VSPACE_TABLE, VSPACE_TABLE_LG, VSPACE_TABLE_SM,
@@ -181,7 +181,8 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textnormal{Shade Temp. Max / Min (IRC 6)} & """ + (_render_value(input_dict,'shade_temp_max','')) + r""" °C / """ + (_render_value(input_dict,'shade_temp_min','')) + r""" °C \\
 \hline
 \end{tabular}
-\osTableSpace{}
+""" + not_stored_note(''.join(_render_value(input_dict, key) for key in (
+        'latitude', 'longitude', 'seismic_zone', 'wind_speed', 'shade_temp_max', 'shade_temp_min'))) + r"""\osTableSpace{}
 \end{table}
 
 \begin{table}[H]
@@ -204,6 +205,8 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textnormal{Skew Angle (degrees)} & """ + (_render_value(input_dict, KEY_SKEW_ANGLE, '°')) + r""" (IRC 24 Cl. 504.8 limit: $\pm$15°) \\
 \hline
 \end{tabular}
+""" + not_stored_note(''.join(_render_value(input_dict, key) for key in (
+        KEY_STRUCTURE_TYPE, KEY_SPAN, KEY_CARRIAGEWAY_WIDTH, KEY_INCLUDE_MEDIAN, KEY_FOOTPATH, KEY_SKEW_ANGLE))) + r"""
 \end{table}
 \osTableSpace{}
 
@@ -223,6 +226,8 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textnormal{Concrete Deck Grade (IRC 22)} & """ + (_render_value(input_dict, KEY_DECK_CONCRETE_GRADE_BASIC)) + r""" \\
 \hline
 \end{tabular}
+""" + not_stored_note(''.join(_render_value(input_dict, key) for key in (
+        KEY_GIRDER, KEY_CROSS_BRACING, KEY_END_DIAPHRAGM, KEY_DECK_CONCRETE_GRADE_BASIC))) + r"""
 \end{table}
 \osTableSpace{}
 
@@ -360,6 +365,7 @@ def _girder_tables(input_dict, n_girders):
             'tab:ch2:girder-gen',
             gen_hdr,
             gen_rows,
+            tabcolsep=TABLE['tabcolsep_narrow'],
         )
         + r'\osTableSpace{}' + '\n\n'
         + r'\osSmallSpace{}' + '\n'
@@ -378,6 +384,7 @@ def _girder_tables(input_dict, n_girders):
             'tab:ch2:girder-rst',
             rst_hdr,
             rst_rows,
+            tabcolsep=TABLE['tabcolsep_narrow'],
         )
     )
 
@@ -421,9 +428,9 @@ def _bracing_tables(input_dict, n_girders):
     ed_rows = "".join([_ed_row(ed_loc, ed_ids, i) for _, _, ed_loc, ed_ids, i in panels])
 
     cb_hdr = (r'\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing}'
-              r' & \textbf{Bracing Section} & \textbf{Spacing (m)} \\')
+              r' & \textbf{Bracing Section (input)} & \textbf{Spacing (m)} \\')
     ed_hdr = (r'\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing}'
-              r' & \textbf{Bracing Section} \\')
+              r' & \textbf{Bracing Section (input)} \\')
 
     return (
         r"""
