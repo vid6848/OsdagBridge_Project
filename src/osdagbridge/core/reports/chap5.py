@@ -273,9 +273,9 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     # Interaction DCRs use the engine bands: PASS <0.90, WARN <1.00, FAIL ≥1.00.
     def _interaction_status(ratio):
         if ratio < 0.90:
-            return "PASS"
+            return status_badge(True)
         elif ratio < 1.00:
-            return "WARN"
+            return r"\osWarnText{\textbf{WARN}}"
         return status_badge(False)
     # M-V interaction UR stored as percent → show ratio (2 dp).
     try:
@@ -527,7 +527,12 @@ def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     def _fat_status(s):
         if s is None or str(s).strip() == "":
             return "---"
-        return status_badge(False, text=s) if "FAIL" in str(s).upper() else str(s)
+        word = str(s).strip().upper()
+        if word == "FAIL":
+            return status_badge(False)
+        if word == "PASS":
+            return status_badge(True)
+        return status_badge(False, text=s) if "FAIL" in word else str(s)
 
     t512_rows = []
     for _gi, (lbl, _) in enumerate(girder_entries, start=1):
@@ -850,7 +855,7 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
 
     def _dks(ok):
         """PASS/FAIL status; '---' when deck design not run."""
-        return ("PASS" if ok else "FAIL") if _dk_has else "---"
+        return status_badge(ok) if _dk_has else "---"
 
     def _dkoh(key, nd=2, scale=1.0, unit=""):
         """Overhang value; 'N/A' when there is no overhang."""

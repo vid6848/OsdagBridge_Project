@@ -71,11 +71,9 @@ def ch7_quantities(input_dict, fig_paths=None):
     return (
         r'\chapter{Material Take-off \& Quantity Summary}' + '\n'
         r'\label{ch:material-takeoff}' + '\n\n'
-        r'\noindent\textbf{Table 7.1  Bill of Materials'
-        r' (Steel, Concrete, and Reinforcement Quantities)}' + '\n\n'
         + longtable(
             TABLE_SPECS['ch7_boq'],
-            'Bill of Materials',
+            'Bill of Materials (Steel, Concrete and Reinforcement Quantities)',
             'tab:ch7:boq',
             hdr,
             body,
