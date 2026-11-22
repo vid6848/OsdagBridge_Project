@@ -189,6 +189,25 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             except Exception:
                 pass
 
+        # The stored area and mass are from initial sizing. After Design take the
+        # final plate sizes, so the take-off agrees with the section property table.
+        designed_areas = []
+        if outputs.get("design_results"):
+            names = ("depth", "web_thickness", "top_flange_width", "top_flange_thickness",
+                     "bottom_flange_width", "bottom_flange_thickness")
+            try:
+                for gi in range(n_girders):
+                    dims = [float(inputs[f"member_properties.girder_details.section_input.{n}.G{gi + 1}.M1"])
+                            for n in names]
+                    d, tw, bft, tft, bfb, tfb = [v / 1000.0 if v >= 5 else v for v in dims]
+                    designed_areas.append(bft * tft + bfb * tfb + (d - tft - tfb) * tw)
+            except (KeyError, TypeError, ValueError):
+                designed_areas = []
+            if not designed_areas and outputs["design_results"].get("A_steel_mm2"):
+                designed_areas = [float(outputs["design_results"]["A_steel_mm2"]) / 1e6] * n_girders
+        if designed_areas:
+            girder_area = sum(designed_areas) / n_girders
+
         total_girder_mass = 0.0
         if girder_area > 0:
             girder_vol = girder_area * span
@@ -197,6 +216,9 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             
             # calculate tonnage / volume
             for gi in range(n_girders):
+                if designed_areas:
+                    total_girder_mass += designed_areas[gi] * span * 7850.0
+                    continue
                 try:
                     mass_per_m = float(resolve_girder_value(inputs, "member_properties.girder_details.section_properties.mass", gi))
                     total_girder_mass += mass_per_m * span
@@ -303,14 +325,27 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             else:
                 n_panels = max(3, int(span / 5.0))
 
+            # average over the girder pairs, so quantity x area is the true total
+            def _mean_area(part, default):
+                found = []
+                for i in range(1, n_girders):
+                    key = f"transverse_member_design.cb.section_properties.{part}.G{i}G{i + 1}.A"
+                    if outputs.get(key):
+                        found.append(float(outputs[key]) / 10000.0)
+                return sum(found) / len(found) if found else default
+
+            top_area = _mean_area("top_chord", bracing_area)
+            bot_area = _mean_area("bottom_chord", bracing_area)
+            bracing_area = _mean_area("bracing", bracing_area)
+
             # 5a. Top Chord
             top_chord_qty = (n_girders - 1) * n_panels if top_chord_enabled else 0
-            top_chord_vol_single = bracing_area * spacing
+            top_chord_vol_single = top_area * spacing
             top_chord_vol_total = top_chord_qty * top_chord_vol_single
             top_chord_wt_single = top_chord_vol_single * 7.85
             top_chord_wt_total = top_chord_vol_total * 7.85
             
-            quantities["bracing_top_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {top_chord_vol_single:.5f}\\text{{ m}}^3$"
+            quantities["bracing_top_vol_formula"] = f"${top_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {top_chord_vol_single:.5f}\\text{{ m}}^3$"
             quantities["bracing_top_qty"] = str(top_chord_qty)
             quantities["bracing_top_vol_total"] = f"{top_chord_vol_total:.2f}" if top_chord_enabled else "0.00"
             quantities["bracing_top_wt_single"] = f"{top_chord_wt_single:.4f}"
@@ -318,12 +353,12 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
 
             # 5b. Bottom Chord
             bot_chord_qty = (n_girders - 1) * n_panels if bot_chord_enabled else 0
-            bot_chord_vol_single = bracing_area * spacing
+            bot_chord_vol_single = bot_area * spacing
             bot_chord_vol_total = bot_chord_qty * bot_chord_vol_single
             bot_chord_wt_single = bot_chord_vol_single * 7.85
             bot_chord_wt_total = bot_chord_vol_total * 7.85
             
-            quantities["bracing_bot_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {bot_chord_vol_single:.5f}\\text{{ m}}^3$"
+            quantities["bracing_bot_vol_formula"] = f"${bot_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {bot_chord_vol_single:.5f}\\text{{ m}}^3$"
             quantities["bracing_bot_qty"] = str(bot_chord_qty)
             quantities["bracing_bot_vol_total"] = f"{bot_chord_vol_total:.2f}" if bot_chord_enabled else "0.00"
             quantities["bracing_bot_wt_single"] = f"{bot_chord_wt_single:.4f}"
@@ -373,9 +408,40 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     except (TypeError, ValueError):
                         pass
 
+        # A bracing type end diaphragm has two diagonals and up to two chords,
+        # any other type is one beam. Both give kg and metres per diaphragm.
+        ed_kg = ed_len = 0.0
+        n_braced = 0
+        brace_h = float(((outputs.get("crossbracing_forces_dict") or {}).get("geometry") or {})
+                        .get("brace_height_m") or 0.0)
+        ed_sp = "transverse_member_design.ed.section_properties"
+        ed_md = "member_properties.end_diaphragm_details"
+        for i in range(1, n_girders):
+            pair = f"G{i}G{i + 1}"
+            diag_m = outputs.get(f"{ed_sp}.end_diaphragm.{pair}.M")
+            if brace_h <= 0 or not diag_m or outputs.get(f"{ed_md}.type.{pair}",
+                    inputs.get(f"{ed_md}.type.{pair}.E{i}M1")) != "Cross Bracing":
+                continue
+            shape = str(outputs.get(f"{ed_md}.{pair}.bracing_type",
+                                    inputs.get(f"{ed_md}.bracing_type.{pair}.E{i}M1", "X")))
+            run = spacing if shape in ("X", "X-Bracing") else spacing / 2.0
+            diag_len = (run ** 2 + brace_h ** 2) ** 0.5
+            ed_kg += 2 * float(diag_m) * diag_len
+            ed_len += 2 * diag_len
+            for part in ("top_chord", "bottom_chord"):
+                chord_m = outputs.get(f"{ed_sp}.{part}.{pair}.M")
+                if chord_m:
+                    ed_kg += float(chord_m) * spacing
+                    ed_len += spacing
+            n_braced += 1
+        if n_braced and n_braced == n_girders - 1:
+            ed_mass_pm = ed_kg / ed_len
+            ed_len /= n_braced
+        else:
+            ed_len = spacing
+
         if ed_mass_pm > 0.0 and spacing > 0.0:
             ed_qty = 2 * (n_girders - 1)
-            ed_len = spacing
             ed_vol_single = (ed_mass_pm * ed_len) / 7850.0
             ed_vol_total = ed_qty * ed_vol_single
             ed_wt_single = (ed_mass_pm * ed_len) / 1000.0
