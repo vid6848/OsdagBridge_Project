@@ -65,12 +65,11 @@ from osdagbridge.core.utils.common import (
     KEY_TS_GIRDER_SPACING,
     KEY_TS_NO_OF_GIRDERS,
     KEY_TS_OVERALL_WIDTH,
-    KEY_WC_LD_LANE_TABLE_COUNT,
     KEY_WC_MATERIAL,
     KEY_WC_THICKNESS
 )
 
-from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex, longtable
+from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex, longtable, design_lanes
 from osdagbridge.core.reports.styles import (
     TABLE, TABLE_SPECS, ROW_END, ROW_END_LG,
     VSPACE_TABLE, VSPACE_TABLE_LG, VSPACE_TABLE_SM,
@@ -88,6 +87,15 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
                       + r""" \osRowEnd{}
 \hline
 """)
+
+    # lane counter is usually empty; then show the IRC 6 Table 6 value
+    _lanes, _from_width = design_lanes(input_dict)
+    if _lanes is None:
+        _lanes_text = '---'
+    elif _from_width:
+        _lanes_text = f'{_lanes} (IRC~6 Table~6, from carriageway width)'
+    else:
+        _lanes_text = f'{_lanes} (per IRC 5 Cl. 104.3.1)'
 
     # body for Typical Section table
     typical_section_body = (
@@ -110,8 +118,8 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
         + _render_value(input_dict, KEY_TS_FOOTPATH_WIDTH, ' m')
         + r' (IRC 5 Cl. 104.3.6 min: 1.5 m) \osRowEnd{}' + '\n\\hline\n'
         + r'\textnormal{No. of Traffic Lanes} & '
-        + _render_value(input_dict, KEY_WC_LD_LANE_TABLE_COUNT)
-        + r' (per IRC 5 Cl. 104.3.1) \osRowEnd{}' + '\n\\hline\n'
+        + _lanes_text
+        + r' \osRowEnd{}' + '\n\\hline\n'
     )
 
     # body for Components Details table

@@ -45,7 +45,6 @@ from osdagbridge.core.utils.common import (
     KEY_TL_LOWEST_MIN_TEMP,
     KEY_TL_TEMP_FALL,
     KEY_TL_TEMP_RISE,
-    KEY_WC_LD_LANE_TABLE_COUNT,
     KEY_WC_MATERIAL,
     KEY_WC_THICKNESS,
     KEY_WL_AVG_EXPOSED_HEIGHT,
@@ -58,7 +57,7 @@ from osdagbridge.core.utils.common import (
     KEY_WL_VERTICAL_WIND_FORCE
 )
 
-from osdagbridge.core.reports.report_utils import _tex, _render_value, longtable
+from osdagbridge.core.reports.report_utils import _tex, _render_value, longtable, design_lanes
 from osdagbridge.core.reports.styles import TABLE_SPECS, ROW_END, VSPACE_SEC
 
 
@@ -91,11 +90,20 @@ def ch3_loads(input_dict):
         except Exception:
             return _NA
 
+    def _track_total_kN():
+        # 70R tracked is given as a load per metre on each track (N/m)
+        try:
+            veh = IRC6_2017.cl_204_1_Class70R_vehicle_track()
+            length = veh['x'][-1] - veh['x'][0]
+            return f"{veh['wheel_loads_udl'] * length * len(veh['z']) / 1000.0:.2f}"
+        except Exception:
+            return _NA
+
     # (key, display_name, impact_clause, no_braking, braking_key, total_load_kN)
     _VEHICLE_DEFS = [
         (KEY_LL_IRC_CLASS_A,       'Class A',              'Class A',  False, KEY_BL_IRC_CLASS_A,       _total_kN(IRC6_2017.cl_204_1_ClassA_vehicle)),
         (KEY_LL_IRC_70R_WHEELED,   'Class 70R (Wheeled)',  'AA/70R',   False, KEY_BL_IRC_70R_WHEELED,   _total_kN(IRC6_2017.cl_204_1_Class70R_vehicle_wheel)),
-        (KEY_LL_IRC_70R_TRACKED,   'Class 70R (Tracked)',  'AA/70R',   False, KEY_BL_IRC_70R_TRACKED,   _NA),
+        (KEY_LL_IRC_70R_TRACKED,   'Class 70R (Tracked)',  'AA/70R',   False, KEY_BL_IRC_70R_TRACKED,   _track_total_kN()),
         (KEY_LL_IRC_AA_WHEELED,    'Class AA (Wheeled)',   'AA/70R',   False, KEY_BL_IRC_AA_WHEELED,    _NA),
         (KEY_LL_IRC_AA_TRACKED,    'Class AA (Tracked)',   'AA/70R',   True,  KEY_BL_IRC_AA_TRACKED,    _NA),
         (KEY_LL_IRC_CLASS_SV,      'Class SV',             'Class A',  False, KEY_BL_IRC_CLASS_SV,      _total_kN(IRC6_2017.cl_204_5_1_special_vehicle)),
@@ -111,13 +119,8 @@ def ch3_loads(input_dict):
         except (ValueError, TypeError):
             span_m = None
 
-    lanes = input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT)
-    lanes_int = None
-    if lanes not in (None, ''):
-        try:
-            lanes_int = int(lanes)
-        except (ValueError, TypeError):
-            lanes_int = None
+    # lane counter is usually empty, so fall back to the carriageway width
+    lanes_int, _ = design_lanes(input_dict)
 
     # Pre-compute braking force once (same value for all ticked vehicles)
     braking_kN_str = '---'
