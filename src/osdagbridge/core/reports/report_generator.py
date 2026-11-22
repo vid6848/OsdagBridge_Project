@@ -536,7 +536,6 @@ class ReportDataBridge:
         return [(check, ftype, source.get_cb_worst(ftype))
                 for check, ftype in (("Moment", "compression"), ("Shear", "tension"))]
 
-    # per-girder values for the tables and the chart
 
     def girder_count(self) -> int:
         from .report_utils import get_girder_entries
