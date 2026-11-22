@@ -37,9 +37,9 @@ COLORS = dict(
 
 TABLE = dict(
     tabcolsep="6pt",
-    arraystretch=1.2,
-    row_gap="6pt",
-    row_gap_lg="8pt",
+    arraystretch=1.15,
+    row_gap="0pt",            # no extra gap, so two girder blocks fit on a page
+    row_gap_lg="2pt",
     row_gap_sm="3pt",
     lt_left=r"\fill",
     lt_right=r"\fill",
@@ -67,6 +67,13 @@ SPACING = dict(
     mini_gap="2pt",
     fig_pre="-0.5em",
     fig_post="0.5em",
+)
+
+# height limits for figures, so they can share a page
+FIGURE = dict(
+    max_height=r"0.34\textheight",
+    plot_height=r"0.29\textheight",
+    section_height=r"0.12\textheight",
 )
 
 HEADER_FOOTER = dict(
@@ -372,6 +379,9 @@ def preamble_block(meta):
 \newcommand{\osFigPreSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
 \newcommand{\osFigMidSpace}{\vspace{""" + SPACING["fig_post"] + r"""}}
 \newcommand{\osFigPostSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
+\newcommand{\osFigMaxH}{""" + FIGURE["max_height"] + r"""}
+\newcommand{\osFigPlotH}{""" + FIGURE["plot_height"] + r"""}
+\newcommand{\osFigSectionH}{""" + FIGURE["section_height"] + r"""}
 
 % Status and Logging Macros
 \newcommand{\osPass}{\textcolor{osdagPass}{\textbf{PASS}}}
@@ -383,6 +393,7 @@ def preamble_block(meta):
 \newcommand{\osLogWarn}[1]{\textcolor{osdagInfo}{#1}}
 \newcommand{\osLogError}[1]{\textcolor{osdagFail}{#1}}
 \newcommand{\osNote}[1]{\noindent\textit{#1}}
+\newcommand{\osTableFoot}[1]{\par\noindent{\footnotesize\itshape\interlinepenalty=10000 #1\par}}
 \newcommand{\osDenseTable}{\footnotesize\setlength{\tabcolsep}{""" + TABLE["tabcolsep_dense"] + r"""}\renewcommand{\arraystretch}{""" + str(TABLE["arraystretch_dense"]) + r"""}}
 \newcommand{\osCompactTable}{\setlength{\tabcolsep}{""" + TABLE["tabcolsep_compact"] + r"""}}
 

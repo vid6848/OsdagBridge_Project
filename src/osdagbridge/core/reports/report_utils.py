@@ -93,6 +93,19 @@ def _keep_blocks_together(body, ncols):
     return re.sub(r'(\\osRowKeep(?:Lg|Sm)?\{\}\s*)\\cline\{(\d+)-(\d+)\}', _rule, body)
 
 
+def _keep_closing_rules(body):
+    """Keep the rule under a row on the same page as the row.
+
+    A plain row end allows a break before \\hline, which leaves the last block
+    on a page open at the bottom.
+    """
+    import re
+
+    body = re.sub(r'\\osRowEnd(Lg|Sm)?\{\}(?:\s*\\cline\{\d+-\d+\})?(\s*\\hline)',
+                  r'\\osRowKeep\1{}\2', body)
+    return re.sub(r'\\\\(\s*\n\\hline)', r'\\\\*\1', body)
+
+
 def design_lanes(input_dict):
     """Number of traffic lanes for the report.
 
@@ -154,6 +167,8 @@ def longtable(col_spec, caption, label, header_row, body, *, tabcolsep=None, lt_
     if n_rows <= SHORT_TABLE_ROWS:
         grp_open = '\\Needspace*{' + str(2 * n_rows + 4) + '\\baselineskip}\n' + grp_open
 
+    body = _keep_closing_rules(body)
+
     cont_hdr = (
         '\\caption[]{\\textbf{' + caption + '} (continued)}\\\\\n'
         '\\hline\n'
@@ -202,7 +217,20 @@ def _tex(value):
                     ('~', r'\textasciitilde{}'), ('^', r'\^{}')]:
         s = s.replace(ch, esc)
     s = s.replace(':', r':\allowbreak{}')
-    return s
+    # pdflatex drops these in text, so use the math symbols
+    return s.replace('≤', r'$\leq$').replace('≥', r'$\geq$')
+
+
+def _render_size_mm(source_dict, key):
+    '''Girder size in mm. After Design the inputs hold metres, before it mm.'''
+    try:
+        val = float(source_dict.get(key))
+    except (TypeError, ValueError):
+        return _render_value(source_dict, key)
+    # no plate is under 5 mm and no girder here is 5 m deep
+    if val < 5:
+        val *= 1000
+    return f"{round(val, 1):g} mm"
 
 
 def _render_value(source_dict, key, unit=""):
@@ -261,7 +289,7 @@ def _fig_or_placeholder(path, caption, width=r'0.9\textwidth'):
         p = path.replace('\\', '/')
         return (r'\begin{figure}[H]' + '\n'
                 r'\centering' + '\n'
-                r'\includegraphics[width=' + width + ']{' + p + '}\n'
+                r'\includegraphics[width=' + width + r',height=\osFigMaxH,keepaspectratio]{' + p + '}\n'
                 r'\caption*{' + caption + '}\n'
                 r'\end{figure}')
     return (r'\begin{figure}[H]' + '\n'
