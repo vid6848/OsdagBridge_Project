@@ -147,6 +147,7 @@ def ch3_loads(input_dict):
 
     # Build one row per ticked vehicle
     veh_rows = []
+    braking_shown = sv_shown = False
     for key, name, im_cls, no_braking, bl_key, total_kN in _VEHICLE_DEFS:
         if not _is_on(input_dict.get(key)):
             continue
@@ -171,6 +172,9 @@ def ch3_loads(input_dict):
         elif _is_on(input_dict.get(bl_key, True)):
             br_considered = 'Yes'
             br_value      = braking_kN_str
+            if lanes_int is not None:
+                braking_shown = True
+                sv_shown = sv_shown or key == KEY_LL_IRC_CLASS_SV
         else:
             br_considered = 'No'
             br_value      = '---'
@@ -199,14 +203,23 @@ def ch3_loads(input_dict):
         )
 
     veh_body = '\n'.join(veh_rows)
+    # the IRC 6 module has one lane based braking value, not one per vehicle
+    _brk_mark = r'\textsuperscript{\ddag}' if braking_shown else ''
+    _brk_note = ''
+    if braking_shown:
+        _brk_note = (
+            r'\osTableFoot{\textsuperscript{\ddag} One lane-based value for all vehicles (Cl.~211.2)'
+            + (r'; Class SV needs no braking (Cl.~204.5.4).' if sv_shown else '.')
+            + '}'
+        )
     veh_hdr  = (
         r'\multirow{2}{*}{\textbf{Vehicle}} & \multirow{2}{*}{\makecell{\textbf{Total}\\\textbf{Load}\\\textbf{(kN)}}}'
         r' & \multirow{2}{*}{\makecell{\textbf{Impact}\\\textbf{Factor}}} & \multicolumn{3}{c|}{\textbf{Braking Load}} \\'
         '\n\\cline{4-6}\n'
-        r' & & & \textbf{Considered?} & \textbf{Value (kN)} & \textbf{Eccentricity (m)} \\'
+        r' & & & \textbf{Considered?} & \textbf{Value (kN)' + _brk_mark + r'} & \textbf{Eccentricity (m)} \\'
     )
     _dag_note = (
-        r'\osNote{\textsuperscript{\dag} Not defined for this vehicle type in the IRC~6 module of this version.}'
+        r'\osTableFoot{\textsuperscript{\dag} Not defined for this vehicle type in the IRC~6 module of this version.}'
     )
 
     # -------------------------------------------------------------------------
@@ -517,6 +530,7 @@ def ch3_loads(input_dict):
                     'tab:ch3:vehicle-live-loads',
                     veh_hdr, veh_body)
         + '\n'
+        + (_brk_note + '\n' if _brk_note else '')
         + _dag_note
         + '\n\n'
         + _centrifugal_note
