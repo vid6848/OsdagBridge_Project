@@ -497,7 +497,6 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
     except Exception as exc:
         logger.warning(f"Error calculating material quantities: {exc}")
 
-    # numbers for the Chapter 7 chart
     def _parse_num(key):
         val = quantities.get(key)
         if val in (None, "N.A.", "", "---"):
