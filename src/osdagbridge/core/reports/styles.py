@@ -22,6 +22,7 @@ PAGE = dict(
 FONT = dict(
     size="12pt",
     linespread=1.15,
+    emergency_stretch="3em",   # lets a long line wrap instead of leaving the margin
     caption_label="bf",
 )
 
@@ -59,6 +60,7 @@ SPACING = dict(
     title_top="1.5cm",
     title_sub="0.3cm",
     title_block="1cm",
+    logo_height="2.2cm",
     table_space="0.4cm",
     table_space_lg="0.8cm",
     table_space_sm="0.2cm",
@@ -71,9 +73,29 @@ SPACING = dict(
 
 # height limits for figures, so they can share a page
 FIGURE = dict(
+    wide_width=r"0.85\textwidth",
+    chart_width=r"0.95\textwidth",
     max_height=r"0.34\textheight",
     plot_height=r"0.29\textheight",
     section_height=r"0.12\textheight",
+)
+
+TITLE = dict(
+    product=r"\Huge",
+    subtitle=r"\large",
+    report=r"\Large",
+    heading=r"\Large\bfseries",
+    chapter_gap="1em",
+    chapter_top="0pt",
+    chapter_top_main="-30pt",
+    chapter_after="10pt",
+)
+
+# contents entries: indent and width of the number
+TOC = dict(
+    chapter=("1.5em", "1.5em"),
+    section=("3.8em", "2.3em"),
+    subsection=("7.0em", "3.2em"),
 )
 
 HEADER_FOOTER = dict(
@@ -91,6 +113,9 @@ HEADER_FOOTER = dict(
 CHART = dict(
     width_in=6.3,
     dpi=200,
+    bar_width=0.55,
+    bar_width_steel=0.45,
+    bar_width_single=0.35,
     threshold_color="red",
     threshold_style="--",
     pass_color="#91B014",
@@ -125,6 +150,26 @@ def status(ok, text=None):
     if ok:
         return r"\osPass{}" if text is None else rf"\osPassText{{{text}}}"
     return r"\osFail{}" if text is None else rf"\osFailText{{{text}}}"
+
+
+def chapter_format(top):
+    """LaTeX for the chapter headings, with the given space above."""
+    return (r"\titleformat{\chapter}[block]{\normalfont" + TITLE["heading"] + r"\centering}{\thechapter}{"
+            + TITLE["chapter_gap"] + "}{}\n"
+            + r"\titlespacing*{\chapter}{0pt}{" + top + "}{" + TITLE["chapter_after"] + "}")
+
+
+def toc_format():
+    """LaTeX for the entries of the table of contents."""
+    out = []
+    for level, (indent, label) in TOC.items():
+        space = VSPACE_MINI if level == "chapter" else ""
+        out.append(r"\titlecontents{" + level + "}[" + indent + "]\n"
+                   + r"  {\normalfont" + space + "}\n"
+                   + r"  {\contentslabel{" + label + "}}\n"
+                   + r"  {\hspace*{-" + label + "}}\n"
+                   + r"  {\hfill\contentspage}")
+    return "\n\n".join(out)
 
 
 def colspec(*cols):
@@ -164,15 +209,15 @@ TABLE_SPECS = {
     "two_col_defl": colspec(("L", 0.45), ("p", 0.55)),
     "title_meta": colspec(("L", 0.28), ("L", 0.72)),
     # Chapter 2 multi-column
-    "ch2_girder_info": colspec(("L", 0.14), ("L", 0.12), ("p", 0.25), ("p", 0.25), ("p", 0.24)),
+    "ch2_girder_info": colspec(("L", 0.14), ("L", 0.14), ("p", 0.24), ("p", 0.24), ("p", 0.24)),
     "ch2_girder_dim": colspec(("L", 0.12), ("L", 0.15), ("L", 0.12), ("p", 0.31), ("p", 0.30)),
-    "ch2_girder_restraint": colspec(("L", 0.10), ("p", 0.16), ("p", 0.16), ("p", 0.22), ("p", 0.18), ("p", 0.18)),
+    "ch2_girder_restraint": colspec(("L", 0.11), ("p", 0.16), ("p", 0.15), ("p", 0.22), ("p", 0.185), ("p", 0.175)),
     "ch2_bracing": colspec(("L", 0.15), ("L", 0.15), ("L", 0.20), ("L", 0.18), ("C", 0.16), ("C", 0.16)),
     # Chapter 3
     "five_col_loads": colspec(("L", 0.28), ("C", 0.16), ("C", 0.14), ("C", 0.24), ("C", 0.18)),
-    "ch3_vehicle_loads": colspec(("L", 0.20), ("C", 0.13), ("C", 0.12), ("C", 0.20), ("C", 0.15), ("C", 0.20)),
+    "ch3_vehicle_loads": colspec(("L", 0.19), ("C", 0.16), ("C", 0.12), ("C", 0.19), ("C", 0.15), ("C", 0.19)),
     # Chapter 4
-    "ch4_demands": colspec(("C", 0.18), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.11), ("C", 0.08), ("C", 0.09), ("C", 0.13), ("C", 0.13)),
+    "ch4_demands": colspec(("C", 0.18), ("C", 0.11), ("C", 0.09), ("C", 0.09), ("C", 0.11), ("C", 0.09), ("C", 0.09), ("C", 0.12), ("C", 0.12)),
     "ch4_reactions": colspec(("C", 0.33), ("C", 0.33), ("C", 0.34)),
     "ch4_deflection": colspec(("L", 0.45), ("p", 0.55)),
     # Chapter 5 girder tables
@@ -203,14 +248,14 @@ TABLE_SPECS = {
     # Chapter 5 bracing and diaphragm tables
     "ch5_cb_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
     "ch5_cb_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
-    "ch5_cb_capacity": colspec(("C", 0.13), ("L", 0.12), ("C", 0.14), ("C", 0.19), ("C", 0.12), ("C", 0.12), ("C", 0.08), ("C", 0.10)),
+    "ch5_cb_capacity": colspec(("C", 0.125), ("L", 0.12), ("C", 0.135), ("C", 0.19), ("C", 0.12), ("C", 0.13), ("C", 0.08), ("C", 0.10)),
     "ch5_ed_props": colspec(("C", 0.16), ("L", 0.16), ("L", 0.17), ("C", 0.19), ("C", 0.16), ("C", 0.16)),
     "ch5_ed_slenderness": colspec(("C", 0.14), ("L", 0.14), ("L", 0.16), ("C", 0.16), ("C", 0.16), ("p", 0.24)),
-    "ch5_ed_capacity": colspec(("C", 0.13), ("L", 0.12), ("C", 0.14), ("C", 0.19), ("C", 0.12), ("C", 0.12), ("C", 0.08), ("C", 0.10)),
+    "ch5_ed_capacity": colspec(("C", 0.125), ("L", 0.12), ("C", 0.135), ("C", 0.19), ("C", 0.12), ("C", 0.13), ("C", 0.08), ("C", 0.10)),
     # Chapter 5 overall summary
     "ch5_overall_summary": colspec(("C", 0.24), ("L", 0.32), ("C", 0.16), ("C", 0.16), ("p", 0.12)),
     # Chapter 7
-    "ch7_boq": colspec(("C", 0.08), ("L", 0.26), ("C", 0.18), ("C", 0.12), ("C", 0.12), ("C", 0.12), ("C", 0.12)),
+    "ch7_boq": colspec(("C", 0.08), ("L", 0.24), ("C", 0.19), ("C", 0.13), ("C", 0.12), ("C", 0.12), ("C", 0.12)),
     # Chapter 8
     "ch8_history": colspec(("C", 0.10), ("C", 0.10), ("p", 0.80)),
 }
@@ -325,6 +370,11 @@ def _first_page_style():
 """
 
 
+def _pdf_text(value):
+    """Plain text for the PDF title and author fields."""
+    return "".join(c for c in str(value or "") if c not in "\\{}%#&$^_~")
+
+
 def preamble_block(meta):
     """Return the LaTeX preamble up to \\begin{document}."""
     vals = {k: _tex(meta.get(k, '')) for k in ('project', 'job', 'date', 'rev')}
@@ -333,6 +383,8 @@ def preamble_block(meta):
     return (
         "\n\\documentclass[" + FONT["size"] + "," + PAGE["paper"] + "]{" + PAGE["doc_class"] + "}\n\n"
         + _packages()
+        + "\\hypersetup{pdftitle={" + _pdf_text(meta.get('project')) + "}, pdfauthor={"
+        + _pdf_text(meta.get('author')) + "},pdfcreator={},pdfproducer={}}\n"
         + _table_setup()
         + "\n% Colors\n"
         + "\\definecolor{osdagGreen}{HTML}{" + COLORS["brand"] + "}\n"
@@ -345,6 +397,7 @@ def preamble_block(meta):
         + _first_page_style()
         + r"""\pagestyle{main}
 \setstretch{""" + str(FONT["linespread"]) + r"""}
+\setlength{\emergencystretch}{""" + FONT["emergency_stretch"] + r"""}
 
 % Custom Commands and Column Types
 \newcommand{\placeholder}[1]{\textit{\textless #1\textgreater}}
@@ -379,6 +432,8 @@ def preamble_block(meta):
 \newcommand{\osFigPreSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
 \newcommand{\osFigMidSpace}{\vspace{""" + SPACING["fig_post"] + r"""}}
 \newcommand{\osFigPostSpace}{\vspace{""" + SPACING["fig_pre"] + r"""}}
+\newcommand{\osFigWideW}{""" + FIGURE["wide_width"] + r"""}
+\newcommand{\osChartW}{""" + FIGURE["chart_width"] + r"""}
 \newcommand{\osFigMaxH}{""" + FIGURE["max_height"] + r"""}
 \newcommand{\osFigPlotH}{""" + FIGURE["plot_height"] + r"""}
 \newcommand{\osFigSectionH}{""" + FIGURE["section_height"] + r"""}
